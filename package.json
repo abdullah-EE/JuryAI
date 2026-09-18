@@ -1,0 +1,30 @@
+{
+  "name": "juryai-demo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "node --require ./tests/node-compat.cjs --import tsx/esm --test tests/**/*.test.ts"
+  },
+  "dependencies": {
+    "next": "^16.3.5",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "zod": "4.1.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.12",
+    "@types/node": "^22.18.1",
+    "@types/react": "19.1.12",
+    "@types/react-dom": "19.1.9",
+    "eslint": "9.35.0",
+    "eslint-config-next": "^16.3.5",
+    "tailwindcss": "4.1.12",
+    "tsx": "^4.23.13",
+    "typescript": "5.9.2"
+  }
+}
