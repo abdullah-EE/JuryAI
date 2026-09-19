@@ -2,7 +2,7 @@ import { z } from "zod";
 import { DemoRunResultSchema } from "./compliance";
 
 export const TrialEventTypeSchema = z.enum([
-  "trial_started", "evidence_partitioned", "evidence_analysis_started", "evidence_analysis_completed",
+  "trial_started", "identity_firewall_completed", "evidence_partitioned", "sufficiency_gate_checked", "evidence_analysis_started", "evidence_analysis_completed",
   "witness_started", "witness_completed", "finding_sealed", "counterfactual_completed",
   "clerk_started", "case_packet_created", "juror_started", "juror_vote_sealed", "jury_complete",
   "jury_revealed", "safeguard_triggered", "judge_assessment_ready", "human_review_required",

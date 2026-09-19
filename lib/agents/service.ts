@@ -10,6 +10,8 @@ import { AgentModelOutputSchema, type AgentModelOutput } from "./output-schema";
 import { InvalidAgentOutputError, type AgentRunner, type ProviderConfig } from "./runner";
 import { runCourtProcess, type CourtProcessOptions } from "../court/service";
 import type { TrialObserver } from "../trial-observer";
+import { applyIdentityFirewall } from "../identity-firewall";
+import { assessAgentSufficiency, type SufficiencyAssessment } from "./sufficiency";
 
 type RunAgentsOptions = {
   runner?: AgentRunner;
@@ -75,6 +77,42 @@ function mockFor(role: AgentRole, caseData: Case = demoCase): AgentFinding {
   return AgentFindingSchema.parse(adapted);
 }
 
+function insufficientFinding(role: AgentRole, assessment: SufficiencyAssessment): AgentFinding {
+  const definition = agentDefinitions[role];
+  const request = assessment.missingItems.join(", ");
+  return AgentFindingSchema.parse({
+    agentId: definition.agentId,
+    role,
+    displayName: definition.displayName,
+    recommendation: `Insufficient evidence — request ${request}`,
+    confidence: 0,
+    claims: [{ id: `${definition.agentId}-CL-1`, statement: `Review paused until ${request} is supplied.`, status: "disputed" }],
+    evidenceReferences: [],
+    risks: [],
+    dataUsed: [],
+    inputManifest: cloneManifest(role),
+    sealedInputDescription: definition.sealedInputDescription,
+  });
+}
+
+async function runSufficiencyGate(
+  role: AgentRole,
+  caseData: Case,
+  counterfactual: CounterfactualResult,
+  observer?: TrialObserver,
+) {
+  const assessment = assessAgentSufficiency(role, caseData, counterfactual);
+  await observer?.({
+    type: "sufficiency_gate_checked",
+    role,
+    evidenceIds: assessment.permittedEvidenceIds,
+    status: assessment.sufficient ? "sufficient" : "insufficient_evidence",
+    summary: assessment.sufficient ? "Minimum necessary context confirmed." : `Missing: ${assessment.missingItems.join(", ")}`,
+    details: { enoughContext: assessment.sufficient, tooMuchContext: assessment.tooMuchContext, missingItems: assessment.missingItems },
+  });
+  return assessment;
+}
+
 function assembleFinding(role: AgentRole, output: AgentModelOutput, counterfactual: CounterfactualResult): AgentFinding {
   const definition = agentDefinitions[role];
   const groundedOutput = role === "bias_privacy_challenger" ? groundedBiasOutput(output, counterfactual) : output;
@@ -133,7 +171,7 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
   const useMocks = options.useMocks ?? process.env.USE_MOCK_AGENTS === "true";
   const demoMode = options.demoMode ?? process.env.DEMO_MODE === "true";
-  const caseData = options.caseData ?? demoCase;
+  const caseData = applyIdentityFirewall(options.caseData ?? demoCase).safeCase;
   const counterfactual = runScenarioCounterfactual(caseData);
   const requestedTimeout = options.timeoutMs ?? Number(process.env.AGENT_TIMEOUT_MS ?? (demoMode ? 5000 : 15000));
   const safeTimeout = Number.isFinite(requestedTimeout) && requestedTimeout > 0 ? requestedTimeout : (demoMode ? 5000 : 15000);
@@ -147,10 +185,11 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
   if (useMocks || !apiKey) {
     const findings = await Promise.all(agentRoles.map(async (role) => {
       const evidenceIds = agentDefinitions[role].manifest.allowedEvidenceIds;
-      await options.observer?.({ type: "witness_started", role, evidenceIds, status: "reviewing" });
-      const finding = mockFor(role, caseData);
-      await options.observer?.({ type: "witness_completed", role, evidenceIds, status: "completed", summary: finding.recommendation, confidence: finding.confidence, mode: "fallback" });
-      await options.observer?.({ type: "finding_sealed", role, evidenceIds, status: "sealed", summary: finding.recommendation });
+      const gate = await runSufficiencyGate(role, caseData, counterfactual, options.observer);
+      if (gate.sufficient) await options.observer?.({ type: "witness_started", role, evidenceIds, status: "reviewing" });
+      const finding = gate.sufficient ? mockFor(role, caseData) : insufficientFinding(role, gate);
+      await options.observer?.({ type: "witness_completed", role, evidenceIds: gate.sufficient ? evidenceIds : [], status: gate.sufficient ? "completed" : "insufficient_evidence", summary: finding.recommendation, confidence: finding.confidence, mode: "fallback" });
+      await options.observer?.({ type: "finding_sealed", role, evidenceIds: gate.sufficient ? evidenceIds : [], status: gate.sufficient ? "sealed" : "abstained", summary: finding.recommendation });
       return finding;
     }));
     await options.observer?.({ type: "counterfactual_completed", evidenceIds: ["EV-05"], status: counterfactual.changedOutcome ? "outcome_changed" : "stable", summary: counterfactual.summary, risk: counterfactual.severity, details: { testedField: counterfactual.testedField, baseline: counterfactual.baselineRecommendation, counterfactual: counterfactual.counterfactualRecommendation } });
@@ -163,6 +202,13 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
   const results = await Promise.all(agentRoles.map(async (role) => {
     const roleStartedAt = Date.now();
     const evidenceIds = agentDefinitions[role].manifest.allowedEvidenceIds;
+    const gate = await runSufficiencyGate(role, caseData, counterfactual, options.observer);
+    if (!gate.sufficient) {
+      const finding = insufficientFinding(role, gate);
+      await options.observer?.({ type: "witness_completed", role, evidenceIds: [], status: "insufficient_evidence", summary: finding.recommendation, confidence: 0, mode: "fallback" });
+      await options.observer?.({ type: "finding_sealed", role, evidenceIds: [], status: "abstained", summary: finding.recommendation });
+      return { finding, fallback: true };
+    }
     await options.observer?.({ type: "witness_started", role, evidenceIds, status: "reviewing" });
     try {
       const finding = await executeLiveAgent(role, runner, provider, counterfactual, !demoMode, caseData);

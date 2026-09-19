@@ -3,6 +3,7 @@ import { runAgentReview } from "./agents/service";
 import { getScenario, ScenarioIdSchema } from "./scenarios";
 import type { TrialEventDraft } from "./trial-observer";
 import { TrialEventSchema, TrialEventTypeSchema, type TrialEvent } from "./trial-event-schema";
+import { applyIdentityFirewall } from "./identity-firewall";
 export { TrialEventSchema, TrialEventTypeSchema, type TrialEvent } from "./trial-event-schema";
 export type TrialSetup = { scenarioId?: unknown; zoneId?: unknown };
 
@@ -26,11 +27,21 @@ export async function executeTrialStream(
   };
 
   await emit({ type: "trial_started", status: "admitted", details: { caseId: scenario.caseData.id, scenario: scenario.id, processingZone: zoneId } });
+  const { safeCase, audit } = applyIdentityFirewall(scenario.caseData);
+  await emit({
+    type: "identity_firewall_completed",
+    status: "direct_identifiers_removed",
+    details: {
+      subjectToken: audit.subjectToken,
+      redactedFields: audit.redactedFields,
+      retainedFields: audit.retainedFields,
+    },
+  });
   await emit({
     type: "evidence_partitioned", status: "routed", evidenceIds: scenario.caseData.evidence.map((item) => item.id),
     details: { decision_witness: ["EV-01", "EV-02", "EV-03"], fact_checker: ["EV-02", "EV-03", "EV-04"], bias_privacy_challenger: ["EV-05"] },
   });
-  const review = await runAgentReview({ caseData: scenario.caseData, observer: emit });
+  const review = await runAgentReview({ caseData: safeCase, observer: emit });
   await emit({ type: "jury_complete", status: "all_votes_sealed", evidenceIds: review.court.casePacket.evidenceReferences });
   await emit({ type: "jury_revealed", status: review.court.juryVerdict.majority, details: { split: review.court.juryVerdict.split, votes: review.court.jurorVotes.map((vote) => `${vote.jurorId}:${vote.vote}`) } });
   for (const trigger of review.court.juryVerdict.safeguardTriggers) await emit({ type: "safeguard_triggered", status: "human_review", risk: trigger });
