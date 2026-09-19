@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Case } from "../schemas";
+import type { Case, CounterfactualResult } from "../schemas";
 import { agentDefinitions, type AgentRole } from "./manifests";
 
 const EvidenceSnippetSchema = z.object({
@@ -29,6 +29,14 @@ const BiasPrivacyPacketSchema = z.object({
   decisionMetadata: z.object({
     recommendation: z.enum(["approve", "decline", "manual_review"]),
     confidence: z.number().min(0).max(1),
+  }).strict(),
+  counterfactualResult: z.object({
+    testedField: z.literal("postalCode"),
+    baselineRecommendation: z.enum(["approve", "decline", "manual_review"]),
+    counterfactualRecommendation: z.enum(["approve", "decline", "manual_review"]),
+    changedOutcome: z.boolean(),
+    severity: z.enum(["low", "medium", "high"]),
+    summary: z.string(),
   }).strict(),
 }).strict();
 
@@ -78,7 +86,10 @@ export function assertPacketWithinManifest(role: AgentRole, candidate: unknown):
   return packet;
 }
 
-export function createAgentInputPacket(role: AgentRole, caseData: Case): AgentInputPacket {
+export function createAgentInputPacket(role: AgentRole, caseData: Case, counterfactual?: CounterfactualResult): AgentInputPacket {
+  if (role === "bias_privacy_challenger" && !counterfactual) {
+    throw new Error("Bias Challenger requires a structured counterfactual result");
+  }
   const evidence = evidenceFor(caseData, role);
   const candidate: AgentInputPacket = role === "decision_witness"
     ? { role, evidence }
@@ -93,7 +104,7 @@ export function createAgentInputPacket(role: AgentRole, caseData: Case): AgentIn
             recommendation: caseData.initialDecision.recommendation,
             confidence: caseData.initialDecision.confidence,
           },
+          counterfactualResult: counterfactual!,
         };
   return structuredClone(assertPacketWithinManifest(role, candidate));
 }
-

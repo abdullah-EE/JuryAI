@@ -6,6 +6,7 @@ export type ProviderConfig = {
   provider: "openai";
   model: string;
   timeoutMs: number;
+  maxOutputTokens: number;
 };
 
 export type AgentRunRequest<TOutput> = {
@@ -27,4 +28,3 @@ export class InvalidAgentOutputError extends Error {
     this.name = "InvalidAgentOutputError";
   }
 }
-

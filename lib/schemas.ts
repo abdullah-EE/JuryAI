@@ -132,6 +132,14 @@ export const AgentFindingSchema = z.object({
 export const AgentReviewResultSchema = z.object({
   findings: z.array(AgentFindingSchema).length(3),
   mode: z.enum(["live", "fallback"]),
+  counterfactual: z.object({
+    testedField: z.literal("postalCode"),
+    baselineRecommendation: z.enum(["approve", "decline", "manual_review"]),
+    counterfactualRecommendation: z.enum(["approve", "decline", "manual_review"]),
+    changedOutcome: z.boolean(),
+    severity: z.enum(["low", "medium", "high"]),
+    summary: z.string(),
+  }).strict(),
 });
 
 export const CaseSchema = z.object({
@@ -191,6 +199,7 @@ export type RiskFlag = z.infer<typeof RiskFlagSchema>;
 export type AgentInputManifest = z.infer<typeof AgentInputManifestSchema>;
 export type AgentFinding = z.infer<typeof AgentFindingSchema>;
 export type AgentReviewResult = z.infer<typeof AgentReviewResultSchema>;
+export type CounterfactualResult = AgentReviewResult["counterfactual"];
 export type Case = z.infer<typeof CaseSchema>;
 export type JuryResult = z.infer<typeof JuryResultSchema>;
 export type HumanDecision = z.infer<typeof HumanDecisionSchema>;

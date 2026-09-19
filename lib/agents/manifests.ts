@@ -54,7 +54,7 @@ export const agentDefinitions: Record<AgentRole, AgentDefinition> = {
       receivesInitialDecisionRationale: true,
     }),
     sealedInputDescription: "EV-05, postal code, and model input labels only — underlying financial records withheld",
-    systemPrompt: "Identify potential proxy discrimination, unnecessary data use, and fairness/privacy concerns from the supplied limited metadata. Do not claim bias is proven or the decision is unbiased. Return concise conclusions, not chain-of-thought. Cite only supplied evidence IDs.",
+    systemPrompt: "Assess potential proxy discrimination and unnecessary data use from the limited metadata. Treat counterfactualResult as the authoritative executed check; do not invent a different result. Never claim bias is proven or the alternative is unbiased. Return concise conclusions, not chain-of-thought. Cite only supplied evidence IDs.",
   },
 };
 
@@ -63,4 +63,3 @@ export const agentRoles = Object.keys(agentDefinitions) as AgentRole[];
 export function cloneManifest(role: AgentRole): AgentInputManifest {
   return AgentInputManifestSchema.parse(structuredClone(agentDefinitions[role].manifest));
 }
-

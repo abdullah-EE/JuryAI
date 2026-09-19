@@ -49,7 +49,7 @@ export class OpenAIResponsesRunner implements AgentRunner {
               schema: z.toJSONSchema(request.outputSchema),
             },
           },
-          max_output_tokens: 900,
+          max_output_tokens: request.provider.maxOutputTokens,
           store: false,
         }),
         signal: controller.signal,
@@ -72,4 +72,3 @@ export class OpenAIResponsesRunner implements AgentRunner {
     }
   }
 }
-
