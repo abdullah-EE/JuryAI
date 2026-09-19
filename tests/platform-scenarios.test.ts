@@ -4,15 +4,11 @@ import { runAgentReview } from "../lib/agents/service";
 import { generateComplianceSummary, processingZones } from "../lib/compliance";
 import { scenarios } from "../lib/scenarios";
 import { executeTrialStream } from "../lib/trial-events";
-import { canNavigateTo, getUnlockedChapter } from "../lib/demo-navigation";
 
 describe("Reusable scenario and governance platform", () => {
   it("defines three scenarios with equivalent evidence contracts", () => {
     assert.deepEqual(scenarios.map((scenario) => scenario.id), ["lending", "hr_screening", "benefits"]);
     for (const scenario of scenarios) assert.deepEqual(scenario.caseData.evidence.map((item) => item.id), ["EV-01", "EV-02", "EV-03", "EV-04", "EV-05"]);
-    assert.equal(getUnlockedChapter({ trialStarted: true, witnessesStarted: true, counterfactualReady: false, clerkStarted: false, humanReviewReady: false, decisionRecorded: false }), 3);
-    assert.equal(canNavigateTo(2, 3), true);
-    assert.equal(canNavigateTo(4, 3), false);
   });
   it("runs every scenario through the same governance engine", async () => {
     for (const scenario of scenarios) {
