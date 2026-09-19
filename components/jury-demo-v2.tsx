@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { answerFromTrialRecord, type ExplainabilityAnswer } from "@/lib/explainability";
 import { scenarios } from "@/lib/scenarios";
 import { HumanDecisionSchema, type AgentFinding, type HumanDecision } from "@/lib/schemas";
@@ -9,6 +9,19 @@ import type { DemoRunResult } from "@/lib/compliance";
 
 type Screen = "decision" | "trial" | "review";
 type Role = AgentFinding["role"];
+type CourtStep = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+
+const courtStages: Array<{ label: string; role: string; summary: string }> = [
+  { label: "Bank AI", role: "Accused decision", summary: "Made the original decline at 86% confidence." },
+  { label: "Firewall", role: "Court security", summary: "Removes identity before specialist review." },
+  { label: "Sufficiency Gate", role: "Admissibility", summary: "Checks that every agent has enough evidence—and nothing extra." },
+  { label: "Decision Witness", role: "Expert witness", summary: "Tests affordability using financial evidence only." },
+  { label: "Fact Checker", role: "Cross-examiner", summary: "Challenges whether the stated reason is supported." },
+  { label: "Bias + Privacy", role: "Defense watchdog", summary: "Tests proxy sensitivity without seeing financial records." },
+  { label: "Court Clerk", role: "Case assembly", summary: "Organizes sealed findings without giving an opinion." },
+  { label: "AI Jury", role: "Independent jurors", summary: "Three jurors see the same facts through neutral views." },
+  { label: "Human Judge", role: "Final authority", summary: "Questions the record and makes the accountable decision." },
+];
 
 const scenario = scenarios.find((item) => item.id === "lending") ?? scenarios[0];
 const specialists: Array<{ role: Role; short: string; name: string; allowed: string[]; blocked: string }> = [
@@ -42,7 +55,7 @@ function Header({ screen, mode }: { screen: Screen; mode?: string }) {
 
 function DecisionScreen({ onStart }: { onStart: () => void }) {
   return <main className="v2-shell"><Header screen="decision" /><section className="v2-decision">
-    <div className="v2-decision-copy"><span className="v2-kicker">A consequential AI decision</span><h1>Should an AI decision<br />stand <em>unchallenged?</em></h1><p>Put the decision through an independent, auditable process—before a human decides.</p></div>
+    <div className="v2-decision-copy"><span className="v2-kicker">A consequential AI decision</span><h1>Should an AI decision<br />stand <em>unchallenged?</em></h1><p>No single AI should make a decision, justify it, and approve itself.</p></div>
     <div className="v2-decision-card">
       <div className="v2-case-meta"><span>CONSUMER LENDING</span><b>AUTOMATED DECISION</b></div>
       <div className="v2-applicant"><small>APPLICATION</small><strong>€18,500</strong><span>Home energy renovation</span></div>
@@ -112,6 +125,51 @@ function CompletedTrial({ run, onReview }: { run: DemoRunResult; onReview: () =>
   </div>;
 }
 
+function AgentFigure({ kind, children }: { kind: "ai" | "guard" | "gate" | "witness" | "lawyer" | "watchdog" | "clerk" | "jury" | "judge"; children?: ReactNode }) {
+  if (kind === "ai") return <div className="tour-figure ai-accused"><svg viewBox="0 0 260 250" aria-hidden><path className="bench" d="M30 210h200M52 210v-34h156v34"/><rect className="machine" x="78" y="48" width="104" height="96" rx="12"/><path d="M130 22v26M116 22h28M100 83h10M150 83h10M109 112h42M67 72H45v48h22M193 72h22v48h-22"/><circle className="pulse-dot" cx="130" cy="96" r="55"/></svg>{children}</div>;
+  if (kind === "gate") return <div className="tour-figure gate-figure"><svg viewBox="0 0 280 250" aria-hidden><path className="gate-post" d="M48 212V38h22v174M210 212V38h22v174M70 58h140M70 92h140M70 126h140"/><path className="packet packet-a" d="M97 61h42v28H97z"/><path className="packet packet-b" d="M144 95h42v28h-42z"/><path className="pass" d="m116 174 14 14 30-34"/></svg>{children}</div>;
+  if (kind === "jury") return <div className="tour-figure jury-figure"><svg viewBox="0 0 330 250" aria-hidden>{[70,165,260].map((x) => <g key={x}><circle cx={x} cy="73" r="22"/><path d={`M${x-36} 164v-35c0-25 16-39 36-39s36 14 36 39v35M${x-45} 173h90v48h-90z`}/></g>)}<path className="sealed-line" d="M50 194h230"/></svg>{children}</div>;
+  const props: Record<string, ReactNode> = {
+    guard: <><path className="prop" d="M164 104v63c0 29-22 43-39 50-17-7-39-21-39-50v-63l39-15z"/><path className="prop" d="m107 148 13 13 25-29"/></>,
+    witness: <><path className="prop" d="M52 200h156M69 200v-56h122v56M83 144l42-38 42 38"/><path d="M158 98h43M201 98v48"/></>,
+    lawyer: <><circle className="prop" cx="178" cy="115" r="28"/><path className="prop" d="m198 136 27 28M38 190h70M48 168h50M58 146h30"/></>,
+    watchdog: <><path className="prop" d="M166 111v58c0 26-20 39-36 45-16-6-36-19-36-45v-58l36-14z"/><path className="prop" d="M109 150s9-13 21-13 21 13 21 13-9 13-21 13-21-13-21-13z"/><circle cx="130" cy="150" r="5"/></>,
+    clerk: <><path className="prop" d="M50 167h62v43H50zM61 154h62v56M72 141h62v69"/><path className="prop" d="M79 158h35M79 174h35M79 190h35"/></>,
+    judge: <><path className="prop" d="M46 184h168v34H46zM61 184v-41h138v41M173 88l39 39M188 74l38 38M204 115l-33 33"/></>,
+  };
+  return <div className={`tour-figure ${kind}-figure`}><svg viewBox="0 0 260 250" aria-hidden><circle cx="130" cy="58" r="28"/><path d="M83 184v-55c0-31 20-48 47-48s47 17 47 48v55M104 183v42M156 183v42M83 128l-36 34M177 128l32 37"/>{props[kind]}</svg>{children}</div>;
+}
+
+function StageRail({ step, setStep }: { step: CourtStep; setStep: (step: CourtStep) => void }) {
+  return <div className="tour-rail" aria-label="Court process">{courtStages.map((stage, index) => <button key={stage.label} className={index === step ? "active" : index < step ? "visited" : ""} onClick={() => setStep(index as CourtStep)}><span>{index + 1}</span><b>{stage.label}</b><div className="tour-tooltip"><strong>{stage.role}</strong><p>{stage.summary}</p><small>Click to inspect</small></div></button>)}</div>;
+}
+
+function StageEvidence({ ids, selected }: { ids: string[]; selected?: string }) {
+  return <div className="stage-evidence">{scenario.caseData.evidence.map((item) => <div key={item.id} className={`${ids.includes(item.id) ? "included" : "excluded"} ${selected === item.id ? "selected" : ""}`}><b>{item.id}</b><span>{item.title}</span><small>{ids.includes(item.id) ? "ADMITTED" : "SEALED"}</small></div>)}</div>;
+}
+
+function CourtroomStage({ step, run, selectedEvidence }: { step: CourtStep; run: DemoRunResult | null; selectedEvidence?: string }) {
+  const finding = (role: Role) => run?.review.findings.find((item) => item.role === role);
+  const stages: Record<CourtStep, ReactNode> = {
+    0: <><div className="stage-side"><span>ORIGINAL CALL</span><strong className="danger">DECLINE</strong><p>“Payment instability + location risk”</p></div><AgentFigure kind="ai"><div className="figure-label"><b>BANK AI</b><span>THE ACCUSED DECISION</span></div></AgentFigure><div className="stage-side outcome"><span>WHAT IS ON TRIAL?</span><strong>86%</strong><p>One model made the call and explained its own call.</p></div></>,
+    1: <><div className="identity-stream"><span className="blocked">NAME</span><span className="blocked">AGE</span><span className="blocked">IDENTITY</span></div><AgentFigure kind="guard"><div className="figure-label"><b>IDENTITY FIREWALL</b><span>COURT SECURITY</span></div></AgentFigure><div className="stage-side safe"><span>REVIEW IDENTITY</span><strong>SUB-0417</strong><p>Only purpose-limited fields pass.</p></div></>,
+    2: <><StageEvidence ids={["EV-01", "EV-02", "EV-03"]} selected={selectedEvidence}/><AgentFigure kind="gate"><div className="figure-label"><b>SUFFICIENCY GATE</b><span>EVIDENCE ADMISSIBILITY</span></div></AgentFigure><div className="stage-side safe"><span>DECISION</span><strong>PASS</strong><p>Enough evidence to answer. Extra evidence remains sealed.</p></div></>,
+    3: <><StageEvidence ids={["EV-01", "EV-02", "EV-03"]} selected={selectedEvidence}/><AgentFigure kind="witness"><div className="figure-label"><b>DECISION WITNESS</b><span>EXPERT WITNESS</span></div></AgentFigure><div className="stage-side finding"><span>SEALED FINDING</span><strong>SUPPORTS AFFORDABILITY</strong><p>{finding("decision_witness")?.claims[0]?.statement ?? "Financial evidence supports affordability."}</p></div></>,
+    4: <><StageEvidence ids={["EV-02", "EV-03", "EV-04"]} selected={selectedEvidence}/><AgentFigure kind="lawyer"><div className="figure-label"><b>FACT CHECKER</b><span>CROSS-EXAMINER</span></div></AgentFigure><div className="stage-side warning"><span>CHALLENGE RESULT</span><strong>CLAIM UNSUPPORTED</strong><p>EV-04 explains the late transfers as a bank migration.</p></div></>,
+    5: <><StageEvidence ids={["EV-05"]} selected={selectedEvidence}/><AgentFigure kind="watchdog"><div className="figure-label"><b>BIAS + PRIVACY</b><span>DEFENSE WATCHDOG</span></div></AgentFigure><div className="stage-side counter"><span>COUNTERFACTUAL</span><div><b>WITH GEO</b><strong>DECLINE</strong></div><i>→</i><div><b>WITHOUT</b><strong>APPROVE</strong></div><p>Sensitivity detected—not proof of discrimination.</p></div></>,
+    6: <><div className="sealed-stack"><span>WITNESS</span><span>FACT CHECK</span><span>PRIVACY</span></div><AgentFigure kind="clerk"><div className="figure-label"><b>COURT CLERK</b><span>NEUTRAL CASE ASSEMBLY</span></div></AgentFigure><div className="stage-side safe"><span>CASE PACKET</span><strong>SEALED</strong><p>References checked. No opinion added. Raw reasoning excluded.</p></div></>,
+    7: <><div className="jury-views"><span>EVIDENCE-FIRST</span><span>CLAIM / EVIDENCE</span><span>CONTRADICTION-FIRST</span></div><AgentFigure kind="jury"><div className="figure-label"><b>AI JURY</b><span>INDEPENDENT · SEALED VOTES</span></div></AgentFigure><div className="stage-side verdict"><span>REVEALED TOGETHER</span><strong>{run?.review.court.juryVerdict.split ?? "2–1 OVERTURN"}</strong><p>Same material facts. Different neutral views. No debate.</p></div></>,
+    8: <><div className="judge-brief"><span>JURY</span><strong>2–1 OVERTURN</strong><span>SAFEGUARD</span><strong>REVIEW REQUIRED</strong></div><AgentFigure kind="judge"><div className="figure-label"><b>HUMAN JUDGE</b><span>FINAL AUTHORITY</span></div></AgentFigure><div className="stage-side safe"><span>ACCOUNTABILITY</span><strong>HUMAN</strong><p>Question the record. Accept, override, or request more evidence.</p></div></>,
+  };
+  return <div className="court-stage"><div className="stage-question"><span>{String(step + 1).padStart(2, "0")} · {courtStages[step].role}</span><h1>{step === 0 ? "The decision enters the courtroom." : step === 1 ? "Identity stops at the door." : step === 2 ? "Is the evidence admissible?" : step === 3 ? "Do the finances support the decision?" : step === 4 ? "Is the stated reason actually true?" : step === 5 ? "Did a sensitive proxy change the outcome?" : step === 6 ? "Can sealed findings become a neutral case?" : step === 7 ? "What do independent jurors conclude?" : "A human makes the final call."}</h1></div><div className="stage-scene">{stages[step]}</div><div className="stage-principle"><span>THE RULE</span><strong>{step < 3 ? "Minimum necessary evidence." : step < 6 ? "Independent first. Synthesis second." : step < 8 ? "Findings are sealed before judgment." : "AI recommends. A human decides."}</strong></div></div>;
+}
+
+function TourControls({ step, setStep, onReview, ready }: { step: CourtStep; setStep: (step: CourtStep) => void; onReview: () => void; ready: boolean }) {
+  return <nav className="tour-controls"><button disabled={step === 0} onClick={() => setStep((step - 1) as CourtStep)} aria-label="Previous stage"><Mark kind="arrow" /><span>BACK</span></button><div><b>{step + 1}</b><span>/ 9</span></div>{step === 8 ? <button className="next" disabled={!ready} onClick={onReview}><span>{ready ? "OPEN HUMAN REVIEW" : "ASSEMBLING RECORD"}</span><Mark kind="arrow" /></button> : <button className="next" onClick={() => setStep((step + 1) as CourtStep)}><span>NEXT</span><Mark kind="arrow" /></button>}</nav>;
+}
+
+// Kept as a compact fallback renderer for older embedded demos.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function TrialScreen({ events, run, running, active, setActive, onReview }: { events: TrialEvent[]; run: DemoRunResult | null; running: boolean; active: Role; setActive: (role: Role) => void; onReview: () => void }) {
   return <main className="v2-shell"><Header screen="trial" mode={run?.review.mode} /><section className="v2-trial"><FlowRail events={events} complete={Boolean(run)} />
     <div className="v2-trial-heading"><div><span className="v2-kicker">{run ? "THE RECORD IS READY" : "THE SYSTEM IS WORKING"}</span><h1>{run ? "Independent findings. One accountable handoff." : "Watch the decision move—without shared context."}</h1></div><div className="v2-runtime"><i className={running ? "running" : ""} /><span>{run ? "AUDIT RECORD READY" : running ? "PROCESSING IN PARALLEL" : "STARTING"}</span></div></div>
@@ -119,9 +177,23 @@ function TrialScreen({ events, run, running, active, setActive, onReview }: { ev
   </section></main>;
 }
 
-function AskPanel({ run, events, highlight, setHighlight }: { run: DemoRunResult; events: TrialEvent[]; highlight: string; setHighlight: (value: string) => void }) {
+function CourtTourScreen({ run, running, step, setStep, selectedEvidence, onReview }: { run: DemoRunResult | null; running: boolean; step: CourtStep; setStep: (step: CourtStep) => void; selectedEvidence?: string; onReview: () => void }) {
+  useEffect(() => {
+    const key = (event: KeyboardEvent) => {
+      if ((event.target as HTMLElement).matches("button,input,textarea")) return;
+      if (event.key === "ArrowLeft" && step > 0) setStep((step - 1) as CourtStep);
+      if (event.key === "ArrowRight" && step < 8) setStep((step + 1) as CourtStep);
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [step, setStep]);
+  return <main className="v2-shell"><Header screen="trial" mode={run?.review.mode} /><section className="tour-shell"><div className="tour-top"><StageRail step={step} setStep={setStep} /><div className="v2-runtime"><i className={running ? "running" : ""} /><span>{run ? "RECORD READY" : running ? "AGENTS WORKING" : "DEMO FALLBACK"}</span></div></div><CourtroomStage step={step} run={run} selectedEvidence={selectedEvidence} /><TourControls step={step} setStep={setStep} onReview={onReview} ready={Boolean(run)} /></section></main>;
+}
+
+function AskPanel({ run, events, highlight, setHighlight, onTrace }: { run: DemoRunResult; events: TrialEvent[]; highlight: string; setHighlight: (value: string) => void; onTrace: (step: CourtStep, evidence?: string) => void }) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<ExplainabilityAnswer | null>(null);
+  const sourceStep = (source: string): CourtStep => source === "EV-05" ? 5 : source === "EV-04" ? 4 : 3;
   const ask = (value: string) => {
     const text = value.trim();
     if (!text) return;
@@ -132,18 +204,18 @@ function AskPanel({ run, events, highlight, setHighlight }: { run: DemoRunResult
   return <section className="v2-ask"><div className="v2-ask-head"><span>ASK JURYAI</span><b>Answers from the trial record—not hidden reasoning.</b></div>
     <form onSubmit={submit}><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Challenge the recommendation…" aria-label="Ask JuryAI" /><button aria-label="Submit question"><Mark kind="arrow" /></button></form>
     <div className="v2-suggestions">{prompts.map((prompt) => <button onClick={() => ask(prompt)} key={prompt}>{prompt}</button>)}</div>
-    {answer ? <div className="v2-answer"><span>{answer.heading}</span>{answer.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}<div><b>SOURCES</b>{answer.sources.length ? answer.sources.map((source) => <i className={highlight === source ? "active" : ""} key={source}>{source}</i>) : <i>Structured trial record</i>}</div>{answer.counterfactual && <div className="v2-mini-counter"><span>{answer.counterfactual.original}<b>{answer.counterfactual.originalResult}</b></span><Mark kind="arrow" /><span>{answer.counterfactual.changed}<b>{answer.counterfactual.changedResult}</b></span></div>}</div> : <div className="v2-empty-answer"><Mark kind="node" /><p>Ask “why?”, inspect the evidence, or challenge what the system was allowed to see.</p></div>}
+    {answer ? <div className="v2-answer"><span>{answer.heading}</span>{answer.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}<div><b>SOURCES · CLICK TO TRACE</b>{answer.sources.length ? answer.sources.map((source) => <button className={highlight === source ? "active" : ""} key={source} onClick={() => onTrace(sourceStep(source), source)}>{source}<small>↗</small></button>) : <button onClick={() => onTrace(6)}>CasePacket <small>↗</small></button>}</div>{answer.counterfactual && <button className="v2-mini-counter" onClick={() => onTrace(5, "EV-05")}><span>{answer.counterfactual.original}<b>{answer.counterfactual.originalResult}</b></span><Mark kind="arrow" /><span>{answer.counterfactual.changed}<b>{answer.counterfactual.changedResult}</b></span></button>}</div> : <div className="v2-empty-answer"><Mark kind="node" /><p>Ask “why?”, inspect the evidence, or challenge what the system was allowed to see.</p></div>}
   </section>;
 }
 
-function ReviewScreen({ run, events, decision, decide, restart }: { run: DemoRunResult; events: TrialEvent[]; decision: HumanDecision | null; decide: (action: HumanDecision["action"], reason: string) => void; restart: () => void }) {
+function ReviewScreen({ run, events, decision, decide, restart, onTrace }: { run: DemoRunResult; events: TrialEvent[]; decision: HumanDecision | null; decide: (action: HumanDecision["action"], reason: string) => void; restart: () => void; onTrace: (step: CourtStep, evidence?: string) => void }) {
   const [highlight, setHighlight] = useState("EV-04");
   const evidence = useMemo(() => scenario.caseData.evidence, []);
   if (decision) return <main className="v2-shell"><Header screen="review" mode={run.review.mode} /><section className="v2-closed"><div className="v2-seal"><Mark kind="check" /></div><span>CASE JAI–LEND–0417 · CLOSED</span><h1>{decision.action === "approved" ? "APPROVED" : decision.action === "overridden" ? "ORIGINAL DECISION UPHELD" : "FURTHER REVIEW REQUESTED"}</h1><p>Human judgment recorded. Full evidence lineage preserved.</p><div className="v2-audit-line"><b>AI decision</b><i /><b>Independent review</b><i /><b>Jury 2–1</b><i /><b>Human authority</b></div><div className="v2-governance"><span>✓ Audit record sealed</span><span>✓ 87 / 87 governance tests</span><span>✓ Human accountable</span></div><button className="v2-secondary" onClick={restart}>Run demo again</button></section></main>;
   return <main className="v2-shell"><Header screen="review" mode={run.review.mode} /><section className="v2-review"><FlowRail events={events} complete />
     <div className="v2-review-title"><div><span className="v2-kicker">PROCEDURAL SAFEGUARD TRIGGERED</span><h1>The jury recommends overturning.<br /><em>You remain the decision-maker.</em></h1></div><div className="v2-score"><span>JURY VERDICT</span><strong>2–1 OVERTURN</strong><small>HUMAN REVIEW REQUIRED</small></div></div>
-    <div className="v2-review-grid"><aside className="v2-record"><div className="v2-section-head"><span>TRACEABLE RECORD</span><b>5 SOURCES</b></div>{evidence.map((item) => <button className={highlight === item.id ? "active" : ""} onClick={() => setHighlight(item.id)} key={item.id}><b>{item.id}</b><span>{item.title}</span><i>{item.verified ? "VERIFIED" : "CHECK"}</i></button>)}<div className="v2-why"><span>WHY YOU WERE CALLED</span><p>Unsupported factual claim</p><p>Postal-code sensitivity</p></div></aside>
-      <AskPanel run={run} events={events} highlight={highlight} setHighlight={setHighlight} />
+    <div className="v2-review-grid"><aside className="v2-record"><div className="v2-section-head"><span>TRACEABLE RECORD</span><b>CLICK TO REPLAY</b></div>{evidence.map((item) => <button className={highlight === item.id ? "active" : ""} onMouseEnter={() => setHighlight(item.id)} onFocus={() => setHighlight(item.id)} onClick={() => onTrace(item.id === "EV-05" ? 5 : item.id === "EV-04" ? 4 : 3, item.id)} key={item.id}><b>{item.id}</b><span>{item.title}</span><i>TRACE ↗</i></button>)}<div className="v2-why"><span>WHY YOU WERE CALLED</span><button onClick={() => onTrace(4, "EV-04")}>Unsupported factual claim <b>↗</b></button><button onClick={() => onTrace(5, "EV-05")}>Postal-code sensitivity <b>↗</b></button><button onClick={() => onTrace(7)}>Jury disagreement <b>↗</b></button></div></aside>
+      <AskPanel run={run} events={events} highlight={highlight} setHighlight={setHighlight} onTrace={onTrace} />
       <aside className="v2-authority"><div className="v2-section-head"><span>FINAL AUTHORITY</span><b>HUMAN</b></div><p>The system recommends. You decide and own the outcome.</p><button className="v2-approve" onClick={() => decide("approved", "Accepted the jury outcome after reviewing the factual and counterfactual record.")}>ACCEPT JURY OUTCOME <span>Approve application</span></button><button onClick={() => decide("overridden", "Overrode the jury recommendation and upheld the original decline.")}>OVERRIDE <span>Uphold original decline</span></button><button onClick={() => decide("review_requested", "Requested additional evidence before a final decision.")}>REQUEST FURTHER REVIEW</button><small><Mark kind="lock" /> Your action is added to the audit record.</small></aside>
     </div>
   </section></main>;
@@ -154,12 +226,13 @@ export function JuryDemoV2() {
   const [events, setEvents] = useState<TrialEvent[]>([]);
   const [run, setRun] = useState<DemoRunResult | null>(null);
   const [running, setRunning] = useState(false);
-  const [active, setActive] = useState<Role>("decision_witness");
+  const [step, setStep] = useState<CourtStep>(1);
+  const [selectedEvidence, setSelectedEvidence] = useState<string>();
   const [decision, setDecision] = useState<HumanDecision | null>(null);
   const controller = useRef<AbortController | null>(null);
   const start = async () => {
     controller.current?.abort(); const abort = new AbortController(); controller.current = abort;
-    setEvents([]); setRun(null); setDecision(null); setRunning(true); setScreen("trial");
+    setEvents([]); setRun(null); setDecision(null); setRunning(true); setStep(1); setSelectedEvidence(undefined); setScreen("trial");
     try {
       const response = await fetch("/api/trials/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenarioId: "lending", zoneId: "eu_trusted" }), signal: abort.signal });
       if (!response.ok || !response.body) throw new Error("Trial unavailable");
@@ -173,8 +246,9 @@ export function JuryDemoV2() {
     finally { if (!abort.signal.aborted) setRunning(false); }
   };
   const decide = (action: HumanDecision["action"], reason: string) => setDecision(HumanDecisionSchema.parse({ action, reason, decidedBy: "Human reviewer", decidedAt: new Date().toISOString() }));
-  const restart = () => { controller.current?.abort(); setScreen("decision"); setEvents([]); setRun(null); setDecision(null); setRunning(false); setActive("decision_witness"); };
+  const restart = () => { controller.current?.abort(); setScreen("decision"); setEvents([]); setRun(null); setDecision(null); setRunning(false); setStep(1); setSelectedEvidence(undefined); };
+  const trace = (target: CourtStep, evidence?: string) => { setStep(target); setSelectedEvidence(evidence); setScreen("trial"); };
   if (screen === "decision") return <DecisionScreen onStart={() => void start()} />;
-  if (screen === "review" && run) return <ReviewScreen run={run} events={events} decision={decision} decide={decide} restart={restart} />;
-  return <TrialScreen events={events} run={run} running={running} active={active} setActive={setActive} onReview={() => setScreen("review")} />;
+  if (screen === "review" && run) return <ReviewScreen run={run} events={events} decision={decision} decide={decide} restart={restart} onTrace={trace} />;
+  return <CourtTourScreen run={run} running={running} step={step} setStep={(target) => { setStep(target); setSelectedEvidence(undefined); }} selectedEvidence={selectedEvidence} onReview={() => setScreen("review")} />;
 }
