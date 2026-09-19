@@ -7,7 +7,7 @@ import { deliberate } from "@/lib/jury";
 import { generateReport } from "@/lib/report";
 import { runDemoPostalCounterfactual } from "@/lib/counterfactual";
 import { getEscalationReasons } from "@/lib/escalation";
-import { AgentReviewResultSchema, HumanDecisionSchema, type AgentFinding, type CounterfactualResult, type EvidenceSource, type HumanDecision, type JuryResult } from "@/lib/schemas";
+import { AgentReviewResultSchema, HumanDecisionSchema, type AgentFinding, type CounterfactualResult, type CourtProcessResult, type EvidenceSource, type HumanDecision, type JuryResult } from "@/lib/schemas";
 
 type IconName =
   | "scale" | "file" | "brain" | "shield" | "users" | "gavel" | "report"
@@ -225,7 +225,7 @@ function InitialDecision({ next, loading }: { next: () => void; loading: boolean
   );
 }
 
-function BlindCourt({ next, findings, mode, counterfactual }: { next: () => void; findings: AgentFinding[]; mode: "live" | "fallback"; counterfactual: CounterfactualResult }) {
+function BlindCourt({ next, findings, mode, counterfactual, court }: { next: () => void; findings: AgentFinding[]; mode: "live" | "fallback"; counterfactual: CounterfactualResult; court: CourtProcessResult | null }) {
   return (
     <div className="screen-enter">
       <StageHeading eyebrow="JuryAI court" title="Independent testimony, by design." body="Each agent received only the evidence needed for its task. Their first conclusions were sealed from one another to reduce anchoring." aside={<div className="agent-statuses"><div className={`agent-mode agent-mode-${mode}`}><i />{mode === "live" ? "Live agents" : "Demo fallback"}</div><div className="sealed-badge"><Icon name="lock" size={16} /> Testimony sealed</div></div>} />
@@ -235,6 +235,12 @@ function BlindCourt({ next, findings, mode, counterfactual }: { next: () => void
         <div><strong>Blind testimony protocol active</strong><p>Agents cannot see each other&apos;s identity, reasoning, or initial conclusions.</p></div>
         <div className="protocol-id">PROTOCOL <strong>BT-01</strong></div>
       </div>
+
+      {court && <section className="micro-ledger panel">
+        <div className="panel-heading"><div><span className="mini-label">SEALED EVIDENCE MICRO-SESSIONS</span><h3>Evidence examined independently</h3></div><span className="verified-count"><Icon name="lock" size={14} /> {court.ledger.entries.length} sealed findings</span></div>
+        <div className="micro-grid">{court.ledger.entries.map((entry) => <div key={entry.evidenceId}><strong>{entry.evidenceId}</strong><p>{entry.finding}</p><small>{entry.supportStatus} · {Math.round(entry.confidence * 100)}%</small></div>)}</div>
+        <div className="clerk-line"><Icon name="file" size={15} /><span>Court Clerk validated and deduplicated the ledger, then assembled neutral packet {court.casePacket.packetId}.</span></div>
+      </section>}
 
       <div className={`counterfactual-strip ${counterfactual.changedOutcome ? "detected" : "stable"}`}>
         <span><Icon name={counterfactual.changedOutcome ? "alert" : "check"} size={17} /></span>
@@ -273,7 +279,7 @@ function BlindCourt({ next, findings, mode, counterfactual }: { next: () => void
   );
 }
 
-function JuryDeliberation({ next, findings }: { next: () => void; findings: AgentFinding[] }) {
+function JuryDeliberation({ next, findings, court }: { next: () => void; findings: AgentFinding[]; court: CourtProcessResult | null }) {
   const result = useMemo(() => deliberate(findings), [findings]);
   return (
     <div className="screen-enter">
@@ -281,9 +287,11 @@ function JuryDeliberation({ next, findings }: { next: () => void; findings: Agen
 
       <div className="jury-verdict">
         <div className="verdict-icon"><Icon name="gavel" size={27} /></div>
-        <div className="verdict-copy"><span className="mini-label">JURY RECOMMENDATION</span><h2>Human review required</h2><p>{result.rationale}</p></div>
+        <div className="verdict-copy"><span className="mini-label">JURY VERDICT</span><h2>{court ? court.juryVerdict.split : "Human review required"}</h2><p>{court?.juryVerdict.judicialReviewRequired ? "Jury verdict reached — judicial review required." : result.rationale}</p></div>
         <div className="verdict-confidence"><span>Jury confidence</span><strong>{Math.round(result.confidence * 100)}%</strong><div className="meter"><i style={{ width: `${result.confidence * 100}%` }} /></div></div>
       </div>
+
+      {court && <div className="juror-grid">{court.jurorVotes.map((vote) => <article className="panel juror-card" key={vote.jurorId}><span><Icon name="lock" size={13} /> SEALED {vote.jurorId}</span><h3>{vote.vote.replace("_", " ")}</h3><p>{vote.reason}</p><small>{vote.keyEvidenceIds.join(" · ")} · {Math.round(vote.confidence * 100)}%</small></article>)}</div>}
 
       <div className="deliberation-grid">
         <section className="panel compare-panel">
@@ -312,7 +320,7 @@ function JuryDeliberation({ next, findings }: { next: () => void; findings: Agen
   );
 }
 
-function HumanJudge({ onDecision, inspect, juryResult, counterfactual }: { onDecision: (decision: HumanDecision) => void; inspect: () => void; juryResult: JuryResult; counterfactual: CounterfactualResult }) {
+function HumanJudge({ onDecision, inspect, juryResult, counterfactual, court }: { onDecision: (decision: HumanDecision) => void; inspect: () => void; juryResult: JuryResult; counterfactual: CounterfactualResult; court: CourtProcessResult | null }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState(false);
   const escalationReasons = getEscalationReasons(juryResult, counterfactual);
@@ -335,6 +343,7 @@ function HumanJudge({ onDecision, inspect, juryResult, counterfactual }: { onDec
           </div>
           <div className="judge-brief">
             <div className="why-called"><span className="mini-label">HUMAN ESCALATION</span><h4>Why was I called?</h4></div>
+            {court && <><div className="brief-row"><span className="brief-icon teal"><Icon name="users" size={15} /></span><p><strong>Jury verdict: {court.juryVerdict.split}</strong></p></div>{court.judgeAssessments.map((assessment) => <div className="brief-row" key={assessment.issueId}><span className="brief-icon amber"><Icon name="lock" size={15} /></span><p><strong>{assessment.assessment}</strong></p></div>)}</>}
             {escalationReasons.slice(0, 4).map((reason) => <div className="brief-row" key={reason.id}><span className={`brief-icon ${reason.tone}`}><Icon name={reason.id === "counterfactual" ? "fingerprint" : "alert"} size={15} /></span><p><strong>{reason.label}</strong></p></div>)}
           </div>
         </section>
@@ -342,14 +351,14 @@ function HumanJudge({ onDecision, inspect, juryResult, counterfactual }: { onDec
         <section className="judgment-card">
           <div className="section-label">RECORD YOUR JUDGMENT</div>
           <h3>What should happen next?</h3>
-          <p className="judgment-help">Override the automated decline to approve this application, or choose another disposition.</p>
+          <p className="judgment-help">Independent issue assessments were sealed before the jury verdict was revealed. Accept it, override it, or request retrial/additional review.</p>
           <label className="reason-label" htmlFor="reason">Reason for override <span>Required for override</span></label>
           <textarea id="reason" value={reason} onChange={(e) => { setReason(e.target.value); setError(false); }} className={error ? "input-error" : ""} placeholder="e.g. Verified financial evidence supports affordability; exclude the unsupported payment-risk claim and location proxy…" />
           <div className="char-count"><span className={error ? "error-message" : ""}>{error ? "Enter at least 8 characters to create an auditable reason." : "This explanation will appear in the case report."}</span><span>{reason.length} / 400</span></div>
           <div className="judge-actions">
             <AppButton variant="primary" icon="check" onClick={() => finish("overridden", "")}>Override to approve</AppButton>
-            <AppButton variant="secondary" icon="refresh" onClick={() => finish("review_requested", "Additional documentary review requested before a final lending decision.")}>Request review</AppButton>
-            <AppButton variant="ghost" icon={null} onClick={() => finish("approved", "Original automated decline approved after human review.")}>Approve decline</AppButton>
+            <AppButton variant="secondary" icon="refresh" onClick={() => finish("review_requested", "Retrial and additional documentary review requested before final disposition.")}>Request retrial</AppButton>
+            <AppButton variant="ghost" icon={null} onClick={() => finish("approved", `Jury verdict ${court?.juryVerdict.majority ?? "human review"} accepted after independent judicial assessment.`)}>Accept jury verdict</AppButton>
           </div>
           <div className="audit-notice"><Icon name="lock" size={14} /> Decision, identity, reason, and timestamp will be logged.</div>
         </section>
@@ -358,9 +367,9 @@ function HumanJudge({ onDecision, inspect, juryResult, counterfactual }: { onDec
   );
 }
 
-function CaseReport({ decision, restart, findings, mode }: { decision: HumanDecision; restart: () => void; findings: AgentFinding[]; mode: "live" | "fallback" }) {
+function CaseReport({ decision, restart, findings, mode, court, counterfactual }: { decision: HumanDecision; restart: () => void; findings: AgentFinding[]; mode: "live" | "fallback"; court: CourtProcessResult | null; counterfactual: CounterfactualResult }) {
   const juryResult = useMemo(() => deliberate(findings), [findings]);
-  const report = useMemo(() => generateReport(demoCase, findings, juryResult, decision), [decision, findings, juryResult]);
+  const report = useMemo(() => generateReport(demoCase, findings, juryResult, decision, court ?? undefined), [decision, findings, juryResult, court]);
   const actionLabel = decision.action === "overridden" ? "Override approved" : decision.action === "approved" ? "Original decline approved" : "Further review requested";
   const outcome = decision.action === "overridden" ? "Application approved" : decision.action === "approved" ? "Application declined" : "Decision pending review";
   return (
@@ -386,6 +395,8 @@ function CaseReport({ decision, restart, findings, mode }: { decision: HumanDeci
 
         <section className="report-risks"><div className="report-section-title"><span>03</span><strong>Material risks & evidence</strong></div><div className="report-risk-grid">{juryResult.riskFlags.map((risk) => <div key={risk.id}><span className={`severity severity-${risk.severity}`}>{risk.severity}</span><strong>{risk.title}</strong><p>{risk.description}</p><small>{risk.evidenceReferences.join(" · ")}</small></div>)}</div></section>
 
+        {court && <section className="phase4-report"><div className="report-section-title"><span>04</span><strong>Compartmentalized court record</strong></div><div className="phase4-report-grid"><div><strong>Evidence ledger</strong><p>{court.ledger.entries.length} isolated findings; {court.ledger.deduplicatedCount} duplicates removed.</p></div><div><strong>Counterfactual</strong><p>{counterfactual.baselineRecommendation} → {counterfactual.counterfactualRecommendation}; sensitivity {counterfactual.changedOutcome ? "detected" : "not detected"}.</p></div><div><strong>CasePacket</strong><p>{court.casePacket.verifiedFindings.length} verified, {court.casePacket.disputedFindings.length} disputed, {court.casePacket.riskFlags.length} risk flags.</p></div><div><strong>Jury</strong><p>{court.juryVerdict.split}; {court.juryVerdict.safeguardTriggers.join(", ") || "no safeguard trigger"}.</p></div><div><strong>Independent judge review</strong><p>{court.judgeAssessments.map((item) => item.assessment).join(" ")}</p></div></div></section>}
+
         <section className="human-ruling">
           <div className="ruling-label"><Icon name="gavel" size={18} /> HUMAN RULING</div>
           <div><span>DECISION</span><strong>{actionLabel}</strong></div>
@@ -393,7 +404,7 @@ function CaseReport({ decision, restart, findings, mode }: { decision: HumanDeci
           <div className="ruling-signature"><span>DECIDED BY</span><strong>A. Korhonen</strong><small>18 Sep 2026 · 09:43:08 EEST</small></div>
         </section>
 
-        <section className="timeline-section"><div className="report-section-title"><span>04</span><strong>Audit timeline</strong></div><div className="timeline">{report.auditTimeline.map((event, index) => <div key={`${event.time}-${event.title}`} className={index === report.auditTimeline.length - 1 ? "final" : ""}><time>{event.time}</time><i /><p><strong>{event.title}</strong><span>{event.description}</span></p></div>)}</div></section>
+        <section className="timeline-section"><div className="report-section-title"><span>05</span><strong>Audit timeline</strong></div><div className="timeline">{report.auditTimeline.map((event, index) => <div key={`${event.time}-${event.title}`} className={index === report.auditTimeline.length - 1 ? "final" : ""}><time>{event.time}</time><i /><p><strong>{event.title}</strong><span>{event.description}</span></p></div>)}</div></section>
 
         <div className="report-foot"><span><Icon name="fingerprint" size={14} /> Audit ref: {demoCase.id}-BT01-HJ</span><span>{mode === "live" ? "Live isolated agent testimony" : "Deterministic fallback record"}</span></div>
       </article>
@@ -423,6 +434,7 @@ export function JuryDemo() {
   const [findings, setFindings] = useState<AgentFinding[]>(mockFindings);
   const [agentMode, setAgentMode] = useState<"live" | "fallback">("fallback");
   const [counterfactual, setCounterfactual] = useState<CounterfactualResult>(() => runDemoPostalCounterfactual(demoCase));
+  const [court, setCourt] = useState<CourtProcessResult | null>(null);
   const [agentsLoading, setAgentsLoading] = useState(false);
   useEffect(() => { window.scrollTo({ top: 0, behavior: "smooth" }); }, [stage]);
   useEffect(() => {
@@ -440,17 +452,19 @@ export function JuryDemo() {
       setFindings(result.findings);
       setAgentMode(result.mode);
       setCounterfactual(result.counterfactual);
+      setCourt(result.court);
     } catch {
       setFindings(mockFindings);
       setAgentMode("fallback");
       setCounterfactual(runDemoPostalCounterfactual(demoCase));
+      setCourt(null);
     } finally {
       setAgentsLoading(false);
       setStage(2);
     }
   };
   const finish = (humanDecision: HumanDecision) => { setDecision(humanDecision); setStage(5); };
-  const restart = () => { setDecision(null); setFindings(mockFindings); setAgentMode("fallback"); setCounterfactual(runDemoPostalCounterfactual(demoCase)); setStage(0); };
+  const restart = () => { setDecision(null); setFindings(mockFindings); setAgentMode("fallback"); setCounterfactual(runDemoPostalCounterfactual(demoCase)); setCourt(null); setStage(0); };
   const juryResult = useMemo(() => deliberate(findings), [findings]);
 
   return (
@@ -462,12 +476,12 @@ export function JuryDemo() {
         <div className="content-wrap">
           {stage === 0 && <CaseIntake next={next} />}
           {stage === 1 && <InitialDecision next={runTrial} loading={agentsLoading} />}
-          {stage === 2 && <BlindCourt next={next} findings={findings} mode={agentMode} counterfactual={counterfactual} />}
-          {stage === 3 && <JuryDeliberation next={next} findings={findings} />}
-          {stage === 4 && <HumanJudge onDecision={finish} inspect={() => setDrawerOpen(true)} juryResult={juryResult} counterfactual={counterfactual} />}
-          {stage === 5 && decision && <CaseReport decision={decision} restart={restart} findings={findings} mode={agentMode} />}
+          {stage === 2 && <BlindCourt next={next} findings={findings} mode={agentMode} counterfactual={counterfactual} court={court} />}
+          {stage === 3 && <JuryDeliberation next={next} findings={findings} court={court} />}
+          {stage === 4 && <HumanJudge onDecision={finish} inspect={() => setDrawerOpen(true)} juryResult={juryResult} counterfactual={counterfactual} court={court} />}
+          {stage === 5 && decision && <CaseReport decision={decision} restart={restart} findings={findings} mode={agentMode} court={court} counterfactual={counterfactual} />}
         </div>
-        <footer className="app-footer"><span>JuryAI · AaltoAI Hackathon 2026</span><span>Phase 3 · Counterfactual check · Resilient agents</span></footer>
+        <footer className="app-footer"><span>JuryAI · AaltoAI Hackathon 2026</span><span>Phase 4 · Sequential compartmentalization · Human authority</span></footer>
       </div>
       {drawerOpen && <EvidenceDrawer close={() => setDrawerOpen(false)} />}
     </main>

@@ -140,7 +140,88 @@ export const AgentReviewResultSchema = z.object({
     severity: z.enum(["low", "medium", "high"]),
     summary: z.string(),
   }).strict(),
+  court: z.lazy(() => CourtProcessResultSchema),
 });
+
+export const EvidenceMicroFindingSchema = z.object({
+  evidenceId: z.string(),
+  sourceRole: z.literal("evidence_examiner"),
+  finding: z.string().min(1).max(240),
+  supportStatus: z.enum(["verified", "disputed", "insufficient"]),
+  confidence: z.number().min(0).max(1),
+  riskType: z.enum(["factual", "bias", "privacy", "evidence", "procedural"]).nullable(),
+  severity: z.enum(["none", "low", "medium", "high", "critical"]),
+}).strict();
+
+export const EvidenceLedgerSchema = z.object({
+  entries: z.array(EvidenceMicroFindingSchema),
+  provenancePreserved: z.literal(true),
+  deduplicatedCount: z.number().int().nonnegative(),
+}).strict();
+
+export const CasePacketRiskSchema = z.object({
+  type: z.enum(["factual", "bias", "privacy", "evidence", "procedural"]),
+  severity: z.enum(["low", "medium", "high", "critical"]),
+  evidenceIds: z.array(z.string()),
+  label: z.string().max(160),
+}).strict();
+
+export const CasePacketSchema = z.object({
+  packetId: z.string(),
+  verifiedFindings: z.array(EvidenceMicroFindingSchema),
+  disputedFindings: z.array(EvidenceMicroFindingSchema),
+  evidenceReferences: z.array(z.string()),
+  counterfactual: z.object({
+    testedField: z.literal("postalCode"),
+    changedOutcome: z.boolean(),
+    baselineRecommendation: z.enum(["approve", "decline", "manual_review"]),
+    counterfactualRecommendation: z.enum(["approve", "decline", "manual_review"]),
+    severity: z.enum(["low", "medium", "high"]),
+  }).strict(),
+  riskFlags: z.array(CasePacketRiskSchema),
+  contradictions: z.array(z.string().max(200)),
+  confidence: z.number().min(0).max(1),
+}).strict();
+
+export const JurorVoteSchema = z.object({
+  jurorId: z.enum(["J1", "J2", "J3"]),
+  vote: z.enum(["uphold", "overturn", "human_review"]),
+  confidence: z.number().min(0).max(1),
+  keyEvidenceIds: z.array(z.string()).max(5),
+  reason: z.string().min(1).max(180),
+}).strict();
+
+export const JuryVerdictSchema = z.object({
+  majority: z.enum(["uphold", "overturn", "human_review"]),
+  split: z.string(),
+  votes: z.array(JurorVoteSchema).length(3),
+  disagreement: z.boolean(),
+  judicialReviewRequired: z.boolean(),
+  safeguardTriggers: z.array(z.string()),
+}).strict();
+
+export const JudgeIssueAssessmentSchema = z.object({
+  issueId: z.string(),
+  issueType: z.enum(["factual", "bias", "privacy", "counterfactual", "procedural", "evidence"]),
+  assessment: z.string().min(1).max(220),
+  supportStatus: z.enum(["substantiated", "unresolved", "not_substantiated"]),
+  confidence: z.number().min(0).max(1),
+  evidenceIds: z.array(z.string()).max(5),
+}).strict();
+
+export const CourtProcessResultSchema = z.object({
+  ledger: EvidenceLedgerSchema,
+  casePacket: CasePacketSchema,
+  jurorVotes: z.array(JurorVoteSchema).length(3),
+  juryVerdict: JuryVerdictSchema,
+  judgeAssessments: z.array(JudgeIssueAssessmentSchema),
+  procedure: z.object({
+    judgeAssessmentsSealedBeforeVerdictExposure: z.literal(true),
+    evidenceSessionsIndependent: z.literal(true),
+    jurorSessionsIndependent: z.literal(true),
+  }).strict(),
+  mode: z.enum(["live", "fallback"]),
+}).strict();
 
 export const CaseSchema = z.object({
   id: z.string(),
@@ -186,6 +267,7 @@ export const CaseReportSchema = z.object({
   evidence: z.array(EvidenceSourceSchema),
   juryResult: JuryResultSchema,
   humanDecision: HumanDecisionSchema,
+  courtProcess: CourtProcessResultSchema.optional(),
   auditTimeline: z.array(z.object({
     time: z.string(),
     title: z.string(),
@@ -204,3 +286,10 @@ export type Case = z.infer<typeof CaseSchema>;
 export type JuryResult = z.infer<typeof JuryResultSchema>;
 export type HumanDecision = z.infer<typeof HumanDecisionSchema>;
 export type CaseReport = z.infer<typeof CaseReportSchema>;
+export type EvidenceMicroFinding = z.infer<typeof EvidenceMicroFindingSchema>;
+export type EvidenceLedger = z.infer<typeof EvidenceLedgerSchema>;
+export type CasePacket = z.infer<typeof CasePacketSchema>;
+export type JurorVote = z.infer<typeof JurorVoteSchema>;
+export type JuryVerdict = z.infer<typeof JuryVerdictSchema>;
+export type JudgeIssueAssessment = z.infer<typeof JudgeIssueAssessmentSchema>;
+export type CourtProcessResult = z.infer<typeof CourtProcessResultSchema>;

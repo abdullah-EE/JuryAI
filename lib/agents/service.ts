@@ -7,6 +7,7 @@ import { agentDefinitions, agentRoles, cloneManifest, type AgentRole } from "./m
 import { OpenAIResponsesRunner } from "./openai-runner";
 import { AgentModelOutputSchema, type AgentModelOutput } from "./output-schema";
 import { InvalidAgentOutputError, type AgentRunner, type ProviderConfig } from "./runner";
+import { runCourtProcess, type CourtProcessOptions } from "../court/service";
 
 type RunAgentsOptions = {
   runner?: AgentRunner;
@@ -16,6 +17,7 @@ type RunAgentsOptions = {
   model?: string;
   timeoutMs?: number;
   maxOutputTokens?: number;
+  courtRunner?: CourtProcessOptions["runner"];
 };
 
 const sensitivityPattern = /counterfactual sensitivity|remov(?:e|ing).*postal.*(?:change|flip)|postal.*changed.*(?:outcome|recommendation)/i;
@@ -127,7 +129,9 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
     maxOutputTokens: options.maxOutputTokens ?? (demoMode ? 350 : 500),
   };
   if (useMocks || !apiKey) {
-    return AgentReviewResultSchema.parse({ findings: agentRoles.map(mockFor), mode: "fallback", counterfactual });
+    const findings = agentRoles.map(mockFor);
+    const court = await runCourtProcess(demoCase, findings, counterfactual, { useMocks: true, model: provider.model, timeoutMs: provider.timeoutMs });
+    return AgentReviewResultSchema.parse({ findings, mode: "fallback", counterfactual, court });
   }
 
   const runner = options.runner ?? new OpenAIResponsesRunner(apiKey);
@@ -145,5 +149,16 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
   }));
   const mode = results.some((result) => result.fallback) ? "fallback" : "live";
   console.info("[agent-batch]", { status: mode, latencyMs: Date.now() - startedAt, model: provider.model });
-  return AgentReviewResultSchema.parse({ findings: results.map((result) => result.finding), mode, counterfactual });
+  const findings = results.map((result) => result.finding);
+  const court = await runCourtProcess(demoCase, findings, counterfactual, {
+    runner: options.courtRunner,
+    useMocks: Boolean(options.runner && !options.courtRunner),
+    apiKey,
+    model: provider.model,
+    timeoutMs: provider.timeoutMs,
+  });
+  const reviewMode = options.runner && !options.courtRunner
+    ? mode
+    : mode === "fallback" || court.mode === "fallback" ? "fallback" : "live";
+  return AgentReviewResultSchema.parse({ findings, mode: reviewMode, counterfactual, court });
 }
