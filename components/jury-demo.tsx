@@ -1,152 +1,1915 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { processingZones, type DemoRunResult, type ProcessingZoneId } from "@/lib/compliance";
-import { answerFromTrialRecord, type ExplainabilityAnswer } from "@/lib/explainability";
-import { scenarios, type ScenarioDefinition, type ScenarioId } from "@/lib/scenarios";
-import { HumanDecisionSchema, type AgentFinding, type HumanDecision } from "@/lib/schemas";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import {
+  processingZones,
+  type DemoRunResult,
+  type ProcessingZoneId,
+} from "@/lib/compliance";
+import {
+  answerFromTrialRecord,
+  type ExplainabilityAnswer,
+} from "@/lib/explainability";
+import {
+  scenarios,
+  type ScenarioDefinition,
+  type ScenarioId,
+} from "@/lib/scenarios";
+import {
+  HumanDecisionSchema,
+  type AgentFinding,
+  type HumanDecision,
+} from "@/lib/schemas";
 import { TrialEventSchema, type TrialEvent } from "@/lib/trial-event-schema";
 
-type IconName = "scale" | "arrow" | "check" | "lock" | "alert" | "file" | "refresh" | "globe" | "node" | "pause" | "play" | "eye";
-function Icon({name,size=20}:{name:IconName;size?:number}) {
-  const paths:Record<IconName,ReactNode>={
-    scale:<><path d="M12 3v18M5 6h14M7 6l-4 7h8L7 6ZM17 6l-4 7h8l-4-7ZM8 21h8"/><path d="M3 13c.5 2 2 3 4 3s3.5-1 4-3M13 13c.5 2 2 3 4 3s3.5-1 4-3"/></>,
-    arrow:<path d="M5 12h14M14 7l5 5-5 5"/>,check:<path d="m5 12 4 4L19 6"/>,
-    lock:<><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></>,
-    alert:<><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5M12 17.5v.1"/></>,
-    file:<><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5M9 12h6M9 16h6"/></>,
-    refresh:<><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 8A7 7 0 0 1 18.5 7M17.9 16A7 7 0 0 1 5.5 17"/></>,
-    globe:<><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></>,
-    node:<><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM2 9h3M2 15h3M19 9h3M19 15h3M9 2v3M15 2v3M9 19v3M15 19v3"/></>,
-    pause:<><path d="M8 5v14M16 5v14"/></>,play:<path d="m8 5 11 7-11 7Z"/>,eye:<><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></>,
+type IconName =
+  | "scale"
+  | "arrow"
+  | "check"
+  | "lock"
+  | "alert"
+  | "file"
+  | "refresh"
+  | "globe"
+  | "node"
+  | "pause"
+  | "play"
+  | "eye";
+function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
+  const paths: Record<IconName, ReactNode> = {
+    scale: (
+      <>
+        <path d="M12 3v18M5 6h14M7 6l-4 7h8L7 6ZM17 6l-4 7h8l-4-7ZM8 21h8" />
+        <path d="M3 13c.5 2 2 3 4 3s3.5-1 4-3M13 13c.5 2 2 3 4 3s3.5-1 4-3" />
+      </>
+    ),
+    arrow: <path d="M5 12h14M14 7l5 5-5 5" />,
+    check: <path d="m5 12 4 4L19 6" />,
+    lock: (
+      <>
+        <rect x="4" y="10" width="16" height="11" rx="2" />
+        <path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" />
+      </>
+    ),
+    alert: (
+      <>
+        <path d="M12 3 2.5 20h19L12 3Z" />
+        <path d="M12 9v5M12 17.5v.1" />
+      </>
+    ),
+    file: (
+      <>
+        <path d="M6 2h8l4 4v16H6z" />
+        <path d="M14 2v5h5M9 12h6M9 16h6" />
+      </>
+    ),
+    refresh: (
+      <>
+        <path d="M20 7v5h-5M4 17v-5h5" />
+        <path d="M6.1 8A7 7 0 0 1 18.5 7M17.9 16A7 7 0 0 1 5.5 17" />
+      </>
+    ),
+    globe: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+      </>
+    ),
+    node: (
+      <>
+        <rect x="5" y="5" width="14" height="14" rx="2" />
+        <path d="M9 9h6v6H9zM2 9h3M2 15h3M19 9h3M19 15h3M9 2v3M15 2v3M9 19v3M15 19v3" />
+      </>
+    ),
+    pause: (
+      <>
+        <path d="M8 5v14M16 5v14" />
+      </>
+    ),
+    play: <path d="m8 5 11 7-11 7Z" />,
+    eye: (
+      <>
+        <path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12Z" />
+        <circle cx="12" cy="12" r="2.5" />
+      </>
+    ),
   };
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>{paths[name]}</svg>;
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {paths[name]}
+    </svg>
+  );
 }
 
-const agentSpecs:Array<{role:AgentFinding["role"];name:string;packet:string;question:string;blocked:string[]}>=[
-  {role:"decision_witness",name:"Decision Witness",packet:"Financial packet",question:"Does verified evidence support eligibility?",blocked:["Name","Age","Postal code","Other findings"]},
-  {role:"fact_checker",name:"Fact Checker",packet:"Claim + context packet",question:"Is the payment-risk claim supported?",blocked:["Applicant identity","Model identity","Other findings"]},
-  {role:"bias_privacy_challenger",name:"Bias & Privacy Challenger",packet:"Proxy / fairness packet",question:"Did a permitted proxy change the outcome?",blocked:["Name","Age","Financial records","Other findings"]},
+const agentSpecs: Array<{
+  role: AgentFinding["role"];
+  name: string;
+  packet: string;
+  question: string;
+  blocked: string[];
+}> = [
+  {
+    role: "decision_witness",
+    name: "Decision Witness",
+    packet: "Financial packet",
+    question: "Does verified evidence support eligibility?",
+    blocked: ["Name", "Age", "Postal code", "Other findings"],
+  },
+  {
+    role: "fact_checker",
+    name: "Fact Checker",
+    packet: "Claim + context packet",
+    question: "Is the payment-risk claim supported?",
+    blocked: ["Applicant identity", "Model identity", "Other findings"],
+  },
+  {
+    role: "bias_privacy_challenger",
+    name: "Bias & Privacy Challenger",
+    packet: "Proxy / fairness packet",
+    question: "Did a permitted proxy change the outcome?",
+    blocked: ["Name", "Age", "Financial records", "Other findings"],
+  },
 ];
-const chapters=["Welcome","System overview","Bank AI decision","Identity firewall","Specialist review","Counterfactual","Clerk + jury","Review alert","Human review","Decision record"];
-const architecture=["Bank AI","Firewall","Specialists","Challenge","Clerk","Jury","Human"];
-const has=(events:TrialEvent[],type:TrialEvent["type"])=>events.some((event)=>event.type===type);
-const latest=(events:TrialEvent[],type:TrialEvent["type"],role?:string)=>[...events].reverse().find((event)=>event.type===type&&(!role||event.role===role));
-const scenarioFor=(id:ScenarioId)=>scenarios.find((item)=>item.id===id)??scenarios[0];
-function Brand(){return <div className="brand"><span><Icon name="scale" size={21}/></span><strong>JuryAI</strong></div>}
+const chapters = [
+  "Welcome",
+  "System overview",
+  "Bank AI decision",
+  "Identity firewall",
+  "Specialist review",
+  "Counterfactual",
+  "Clerk + jury",
+  "Review alert",
+  "Human review",
+  "Decision record",
+];
+const architecture = [
+  "Bank AI",
+  "Firewall",
+  "Specialists",
+  "Challenge",
+  "Clerk",
+  "Jury",
+  "Human",
+];
+const has = (events: TrialEvent[], type: TrialEvent["type"]) =>
+  events.some((event) => event.type === type);
+const latest = (
+  events: TrialEvent[],
+  type: TrialEvent["type"],
+  role?: string,
+) =>
+  [...events]
+    .reverse()
+    .find((event) => event.type === type && (!role || event.role === role));
+const scenarioFor = (id: ScenarioId) =>
+  scenarios.find((item) => item.id === id) ?? scenarios[0];
+function Brand() {
+  return (
+    <div className="brand">
+      <span>
+        <Icon name="scale" size={21} />
+      </span>
+      <strong>JuryAI</strong>
+    </div>
+  );
+}
 
-export function JuryDemo(){
-  const [scenarioId,setScenarioId]=useState<ScenarioId>("lending");
-  const [zone,setZone]=useState<ProcessingZoneId>("eu_trusted");
-  const [events,setEvents]=useState<TrialEvent[]>([]);
-  const [run,setRun]=useState<DemoRunResult|null>(null);
-  const [running,setRunning]=useState(false);
-  const [decision,setDecision]=useState<HumanDecision|null>(null);
-  const [chapter,setChapter]=useState(1);
-  const [replayKey,setReplayKey]=useState(0);
-  const [decisionOpen,setDecisionOpen]=useState(false);
-  const [contractRole,setContractRole]=useState<AgentFinding["role"]>("decision_witness");
-  const [reviewStep,setReviewStep]=useState(0);
-  const [reviewPlaying,setReviewPlaying]=useState(false);
-  const [reviewRole,setReviewRole]=useState<AgentFinding["role"]>("decision_witness");
-  const [counterfactualRemoved,setCounterfactualRemoved]=useState(false);
-  const [counterfactualWhy,setCounterfactualWhy]=useState(false);
-  const [casePacketOpen,setCasePacketOpen]=useState(false);
-  const [selectedJuror,setSelectedJuror]=useState(0);
-  const [votesRevealed,setVotesRevealed]=useState(false);
-  const [reviewQuestion,setReviewQuestion]=useState("");
-  const [decisionReason,setDecisionReason]=useState("");
-  const controller=useRef<AbortController|null>(null);
-  const scenario=scenarioFor(scenarioId);
-  const zoneInfo=processingZones.find((item)=>item.id===zone)??processingZones[0];
-  const unlocked=decision?10:run?9:has(events,"clerk_started")?7:has(events,"counterfactual_completed")?6:has(events,"evidence_partitioned")?5:events.length?4:3;
-  const go=(target:number)=>{if(target<1||target>unlocked)return;setChapter(target)};
-  const resetInteractions=()=>{setDecisionOpen(false);setContractRole("decision_witness");setReviewStep(0);setReviewPlaying(false);setReviewRole("decision_witness");setCounterfactualRemoved(false);setCounterfactualWhy(false);setCasePacketOpen(false);setSelectedJuror(0);setVotesRevealed(false);setReviewQuestion("");setDecisionReason("")};
-  const start=async()=>{
-    controller.current?.abort();const abort=new AbortController();controller.current=abort;
-    setEvents([]);setRun(null);setDecision(null);setRunning(true);setReplayKey(0);resetInteractions();
-    try{
-      const response=await fetch("/api/trials/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({scenarioId,zoneId:zone}),signal:abort.signal});
-      if(!response.ok||!response.body)throw new Error("Trial stream unavailable");
-      const reader=response.body.getReader();const decoder=new TextDecoder();let buffer="";
-      while(true){const {done,value}=await reader.read();if(done)break;buffer+=decoder.decode(value,{stream:true});const lines=buffer.split("\n");buffer=lines.pop()??"";for(const line of lines){if(!line.trim())continue;const event=TrialEventSchema.parse(JSON.parse(line));setEvents((current)=>[...current,event]);if(event.type==="audit_ready"&&event.result)setRun(event.result)}}
-    }catch{if(!abort.signal.aborted)setEvents((current)=>[...current,{type:"trial_completed",sequence:current.length+1,timestamp:new Date().toISOString(),status:"fallback_failed_safely",mode:"fallback"}])}
-    finally{if(!abort.signal.aborted)setRunning(false)}
+export function JuryDemo() {
+  const [scenarioId, setScenarioId] = useState<ScenarioId>("lending");
+  const [zone, setZone] = useState<ProcessingZoneId>("eu_trusted");
+  const [events, setEvents] = useState<TrialEvent[]>([]);
+  const [run, setRun] = useState<DemoRunResult | null>(null);
+  const [running, setRunning] = useState(false);
+  const [decision, setDecision] = useState<HumanDecision | null>(null);
+  const [chapter, setChapter] = useState(1);
+  const [replayKey, setReplayKey] = useState(0);
+  const [decisionOpen, setDecisionOpen] = useState(false);
+  const [contractRole, setContractRole] =
+    useState<AgentFinding["role"]>("decision_witness");
+  const [contractOpen, setContractOpen] = useState(false);
+  const [reviewStep, setReviewStep] = useState(0);
+  const [reviewPlaying, setReviewPlaying] = useState(false);
+  const [reviewRole, setReviewRole] =
+    useState<AgentFinding["role"]>("decision_witness");
+  const [counterfactualRemoved, setCounterfactualRemoved] = useState(false);
+  const [counterfactualWhy, setCounterfactualWhy] = useState(false);
+  const [casePacketOpen, setCasePacketOpen] = useState(false);
+  const [selectedJuror, setSelectedJuror] = useState(0);
+  const [votesRevealed, setVotesRevealed] = useState(false);
+  const [reviewQuestion, setReviewQuestion] = useState("");
+  const [decisionReason, setDecisionReason] = useState("");
+  const controller = useRef<AbortController | null>(null);
+  const scenario = scenarioFor(scenarioId);
+  const zoneInfo =
+    processingZones.find((item) => item.id === zone) ?? processingZones[0];
+  const unlocked = decision
+    ? 10
+    : run
+      ? 9
+      : has(events, "clerk_started")
+        ? 7
+        : has(events, "counterfactual_completed")
+          ? 6
+          : has(events, "evidence_partitioned")
+            ? 5
+            : events.length
+              ? 4
+              : 3;
+  const go = (target: number) => {
+    if (target < 1 || target > unlocked) return;
+    setChapter(target);
   };
-  const restart=()=>{controller.current?.abort();setEvents([]);setRun(null);setDecision(null);setRunning(false);setChapter(1);setReplayKey(0);resetInteractions()};
-  const decide=(action:HumanDecision["action"],fallbackReason:string)=>{const next=HumanDecisionSchema.parse({action,reason:decisionReason.trim()||fallbackReason,decidedBy:"A. Korhonen · Human reviewer",decidedAt:new Date().toISOString()});setDecision(next);setEvents((current)=>[...current,{type:"trial_completed",sequence:current.length+1,timestamp:next.decidedAt,status:`human_${action}`,summary:next.reason}])};
-  const replay=()=>{setReplayKey((value)=>value+1);if(chapter===5){setReviewStep(0);setReviewPlaying(false)}if(chapter===6){setCounterfactualRemoved(false);setCounterfactualWhy(false)}if(chapter===7)setVotesRevealed(false)};
-  useEffect(()=>{const onKey=(event:KeyboardEvent)=>{if((event.target as HTMLElement)?.matches("button,select,input,textarea"))return;if(event.key==="ArrowLeft")go(chapter-1);if(event.key==="ArrowRight")go(chapter+1)};window.addEventListener("keydown",onKey);return()=>window.removeEventListener("keydown",onKey)});
-  useEffect(()=>{if(!reviewPlaying||chapter!==5)return;const timer=window.setTimeout(()=>setReviewStep((step)=>{if(step>=11){setReviewPlaying(false);return step}return step+1}),780);return()=>window.clearTimeout(timer)},[reviewPlaying,reviewStep,chapter]);
+  const resetInteractions = () => {
+    setDecisionOpen(false);
+    setContractRole("decision_witness");
+    setContractOpen(false);
+    setReviewStep(0);
+    setReviewPlaying(false);
+    setReviewRole("decision_witness");
+    setCounterfactualRemoved(false);
+    setCounterfactualWhy(false);
+    setCasePacketOpen(false);
+    setSelectedJuror(0);
+    setVotesRevealed(false);
+    setReviewQuestion("");
+    setDecisionReason("");
+  };
+  const start = async () => {
+    controller.current?.abort();
+    const abort = new AbortController();
+    controller.current = abort;
+    setEvents([]);
+    setRun(null);
+    setDecision(null);
+    setRunning(true);
+    setReplayKey(0);
+    resetInteractions();
+    try {
+      const response = await fetch("/api/trials/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scenarioId, zoneId: zone }),
+        signal: abort.signal,
+      });
+      if (!response.ok || !response.body)
+        throw new Error("Trial stream unavailable");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const event = TrialEventSchema.parse(JSON.parse(line));
+          setEvents((current) => [...current, event]);
+          if (event.type === "audit_ready" && event.result)
+            setRun(event.result);
+        }
+      }
+    } catch {
+      if (!abort.signal.aborted)
+        setEvents((current) => [
+          ...current,
+          {
+            type: "trial_completed",
+            sequence: current.length + 1,
+            timestamp: new Date().toISOString(),
+            status: "fallback_failed_safely",
+            mode: "fallback",
+          },
+        ]);
+    } finally {
+      if (!abort.signal.aborted) setRunning(false);
+    }
+  };
+  const restart = () => {
+    controller.current?.abort();
+    setEvents([]);
+    setRun(null);
+    setDecision(null);
+    setRunning(false);
+    setChapter(1);
+    setReplayKey(0);
+    resetInteractions();
+  };
+  const decide = (action: HumanDecision["action"], fallbackReason: string) => {
+    const next = HumanDecisionSchema.parse({
+      action,
+      reason: decisionReason.trim() || fallbackReason,
+      decidedBy: "A. Korhonen · Human reviewer",
+      decidedAt: new Date().toISOString(),
+    });
+    setDecision(next);
+    setEvents((current) => [
+      ...current,
+      {
+        type: "trial_completed",
+        sequence: current.length + 1,
+        timestamp: next.decidedAt,
+        status: `human_${action}`,
+        summary: next.reason,
+      },
+    ]);
+  };
+  const replay = () => {
+    setReplayKey((value) => value + 1);
+    if (chapter === 5) {
+      setReviewStep(0);
+      setReviewPlaying(false);
+    }
+    if (chapter === 6) {
+      setCounterfactualRemoved(false);
+      setCounterfactualWhy(false);
+    }
+    if (chapter === 7) setVotesRevealed(false);
+  };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (
+        (event.target as HTMLElement)?.matches("button,select,input,textarea")
+      )
+        return;
+      if (event.key === "ArrowLeft") go(chapter - 1);
+      if (event.key === "ArrowRight") go(chapter + 1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+  useEffect(() => {
+    if (!reviewPlaying || chapter !== 5) return;
+    const timer = window.setTimeout(
+      () =>
+        setReviewStep((step) => {
+          if (step >= 4) {
+            setReviewPlaying(false);
+            return step;
+          }
+          return step + 1;
+        }),
+      900,
+    );
+    return () => window.clearTimeout(timer);
+  }, [reviewPlaying, reviewStep, chapter]);
 
-  let view:ReactNode;
-  if(chapter===1)view=<LandingView onStart={()=>{void start();setChapter(2)}} onOverview={()=>setChapter(2)}/>;
-  else if(chapter===2)view=<SystemOverview/>;
-  else if(chapter===3)view=<DecisionView scenario={scenario} started={events.length>0} running={running} open={decisionOpen} onOpen={()=>setDecisionOpen((value)=>!value)} scenarioId={scenarioId} zone={zone} setScenarioId={setScenarioId} setZone={setZone} start={()=>void start()}/>;
-  else if(chapter===4)view=<ProtectPartition scenario={scenario} events={events} selectedRole={contractRole} onSelect={setContractRole}/>;
-  else if(chapter===5)view=<IndependentReview scenario={scenario} events={events} run={run} step={reviewStep} playing={reviewPlaying} selectedRole={reviewRole} onSelect={setReviewRole} onPlay={()=>setReviewPlaying((value)=>!value)} onStep={()=>{setReviewPlaying(false);setReviewStep((value)=>value>=11?0:value+1)}} onReplay={()=>{setReviewStep(0);setReviewPlaying(true)}}/>;
-  else if(chapter===6)view=<Challenge scenario={scenario} run={run} removed={counterfactualRemoved} why={counterfactualWhy} onToggle={()=>setCounterfactualRemoved((value)=>!value)} onWhy={()=>setCounterfactualWhy((value)=>!value)}/>;
-  else if(chapter===7)view=<ClerkJury run={run} packetOpen={casePacketOpen} onPacket={()=>setCasePacketOpen((value)=>!value)} selectedJuror={selectedJuror} onJuror={(index)=>{setSelectedJuror(index);setCasePacketOpen(false)}} revealed={votesRevealed} onReveal={()=>setVotesRevealed(true)}/>;
-  else if(chapter===8&&run)view=<ReviewAlert scenario={scenario} run={run} onReview={()=>setChapter(9)} onDecision={(action,fallback)=>{decide(action,fallback);setChapter(10)}}/>;
-  else if(chapter===9&&run)view=<HumanReview scenario={scenario} events={events} run={run} decision={decision} question={reviewQuestion} onAsk={setReviewQuestion} reason={decisionReason} onReason={setDecisionReason} decide={decide}/>;
-  else if(chapter===10&&run&&decision)view=<DecisionRecord scenario={scenario} zoneLabel={zoneInfo.label} events={events} run={run} decision={decision} restart={restart}/>;
-  const status=decision?"HUMAN DECISION RECORDED":running?"TRIAL RUNNING":run?"AWAITING HUMAN REVIEW":"READY";
-  return <div className={`product-shell chapter-${chapter}`}><header className="product-header"><Brand/>{chapter>=3&&chapter<=9?<SystemMiniMap chapter={chapter}/>:<div className="header-context"><span>{scenario.caseData.id}</span><strong>{chapters[chapter-1]}</strong></div>}<aside><Icon name="globe" size={16}/>{zoneInfo.label}<i className={running?"active":""}/><b>{status}</b></aside></header><main className="product-stage" key={`${chapter}-${replayKey}`}>{view}</main><nav className="product-nav"><button onClick={()=>go(chapter-1)} disabled={chapter===1}>← BACK</button><button className="stage-replay" onClick={replay} disabled={chapter<=2||chapter>=8}><Icon name="refresh" size={15}/> REPLAY</button><div><span>{String(chapter).padStart(2,"0")} / 10</span><i className="nav-progress"><b style={{transform:`scaleX(${chapter/10})`}}/></i><strong>{chapters[chapter-1]}</strong></div><button onClick={()=>go(chapter+1)} disabled={chapter===10||chapter>=unlocked}>{chapter>=unlocked&&running?"PROCESSING…":"NEXT →"}</button></nav></div>;
+  let view: ReactNode;
+  if (chapter === 1)
+    view = (
+      <LandingView
+        onStart={() => {
+          void start();
+          setChapter(2);
+        }}
+        onOverview={() => setChapter(2)}
+      />
+    );
+  else if (chapter === 2) view = <SystemOverview />;
+  else if (chapter === 3)
+    view = (
+      <DecisionView
+        scenario={scenario}
+        started={events.length > 0}
+        running={running}
+        open={decisionOpen}
+        onOpen={() => setDecisionOpen((value) => !value)}
+        scenarioId={scenarioId}
+        zone={zone}
+        setScenarioId={setScenarioId}
+        setZone={setZone}
+        start={() => void start()}
+      />
+    );
+  else if (chapter === 4)
+    view = (
+      <ProtectPartition
+        scenario={scenario}
+        events={events}
+        selectedRole={contractRole}
+        open={contractOpen}
+        onSelect={(role) => {
+          setContractRole(role);
+          setContractOpen(true);
+        }}
+        onClose={() => setContractOpen(false)}
+      />
+    );
+  else if (chapter === 5)
+    view = (
+      <IndependentReview
+        scenario={scenario}
+        events={events}
+        run={run}
+        step={reviewStep}
+        playing={reviewPlaying}
+        selectedRole={reviewRole}
+        onSelect={(role) => {
+          setReviewPlaying(false);
+          setReviewRole(role);
+          setReviewStep(0);
+        }}
+        onPlay={() => setReviewPlaying((value) => !value)}
+        onStep={() => {
+          setReviewPlaying(false);
+          setReviewStep((value) => (value >= 4 ? 0 : value + 1));
+        }}
+        onReplay={() => {
+          setReviewStep(0);
+          setReviewPlaying(true);
+        }}
+      />
+    );
+  else if (chapter === 6)
+    view = (
+      <Challenge
+        scenario={scenario}
+        run={run}
+        removed={counterfactualRemoved}
+        why={counterfactualWhy}
+        onToggle={() => setCounterfactualRemoved((value) => !value)}
+        onWhy={() => setCounterfactualWhy((value) => !value)}
+      />
+    );
+  else if (chapter === 7)
+    view = (
+      <ClerkJury
+        run={run}
+        packetOpen={casePacketOpen}
+        onPacket={() => setCasePacketOpen((value) => !value)}
+        selectedJuror={selectedJuror}
+        onJuror={(index) => {
+          setSelectedJuror(index);
+          setCasePacketOpen(false);
+        }}
+        revealed={votesRevealed}
+        onReveal={() => setVotesRevealed(true)}
+      />
+    );
+  else if (chapter === 8 && run)
+    view = (
+      <ReviewAlert
+        scenario={scenario}
+        run={run}
+        onReview={() => setChapter(9)}
+      />
+    );
+  else if (chapter === 9 && run)
+    view = (
+      <HumanReview
+        scenario={scenario}
+        events={events}
+        run={run}
+        decision={decision}
+        question={reviewQuestion}
+        onAsk={setReviewQuestion}
+        reason={decisionReason}
+        onReason={setDecisionReason}
+        decide={decide}
+      />
+    );
+  else if (chapter === 10 && run && decision)
+    view = (
+      <DecisionRecord
+        scenario={scenario}
+        zoneLabel={zoneInfo.label}
+        events={events}
+        run={run}
+        decision={decision}
+        restart={restart}
+      />
+    );
+  const status = decision
+    ? "HUMAN DECISION RECORDED"
+    : running
+      ? "TRIAL RUNNING"
+      : run
+        ? "AWAITING HUMAN REVIEW"
+        : "READY";
+  return (
+    <div className={`product-shell chapter-${chapter}`}>
+      <header className="product-header">
+        <Brand />
+        {chapter >= 3 && chapter <= 9 ? (
+          <SystemMiniMap chapter={chapter} />
+        ) : (
+          <div className="header-context">
+            <span>{scenario.caseData.id}</span>
+            <strong>{chapters[chapter - 1]}</strong>
+          </div>
+        )}
+        <aside>
+          <Icon name="globe" size={16} />
+          {zoneInfo.label}
+          <i className={running ? "active" : ""} />
+          <b>{status}</b>
+        </aside>
+      </header>
+      <main className="product-stage" key={`${chapter}-${replayKey}`}>
+        {view}
+      </main>
+      <nav className="product-nav">
+        <button onClick={() => go(chapter - 1)} disabled={chapter === 1}>
+          ← BACK
+        </button>
+        <button
+          className="stage-replay"
+          onClick={replay}
+          disabled={chapter <= 2 || chapter >= 8}
+        >
+          <Icon name="refresh" size={15} /> REPLAY
+        </button>
+        <div>
+          <span>{String(chapter).padStart(2, "0")} / 10</span>
+          <i className="nav-progress">
+            <b style={{ transform: `scaleX(${chapter / 10})` }} />
+          </i>
+          <strong>{chapters[chapter - 1]}</strong>
+        </div>
+        <button
+          onClick={() => go(chapter + 1)}
+          disabled={chapter === 10 || chapter >= unlocked}
+        >
+          {chapter >= unlocked && running ? "PROCESSING…" : "NEXT →"}
+        </button>
+      </nav>
+    </div>
+  );
 }
 
-function LandingView({onStart,onOverview}:{onStart:()=>void;onOverview:()=>void}){return <section className="landing-view"><div className="landing-geometry" aria-hidden><i/><i/><i/><i/></div><div className="landing-mark"><Brand/><span>DECISION ASSURANCE</span></div><div className="landing-copy"><p>INDEPENDENT DECISION ASSURANCE FOR HIGH-STAKES AI.</p><h1>AI SHOULD NOT BE<br/><em>JUDGE, JURY,</em><br/>AND WITNESS.</h1><div className="landing-actions"><button onClick={onStart}>START LIVE REVIEW <Icon name="arrow" size={19}/></button><button onClick={onOverview}>SEE HOW JURYAI WORKS</button></div></div><footer><span>BUILT FIRST FOR AI-ASSISTED LENDING DECISIONS.</span><strong>GOVERN THE DECISION, NOT JUST THE MODEL.</strong></footer></section>}
-
-function ArchitectureFlow({compact=false,active=[]}:{compact?:boolean;active?:number[]}){const icons:IconName[]=["node","lock","eye","refresh","file","scale","check"];return <div className={compact?"architecture-flow compact":"architecture-flow"}>{architecture.map((label,index)=><div key={label} className={active.includes(index)?"active":""}><span><Icon name={icons[index]} size={compact?15:28}/></span><strong>{label}</strong>{index<architecture.length-1&&<i><Icon name="arrow" size={compact?12:18}/></i>}</div>)}</div>}
-function SystemMiniMap({chapter}:{chapter:number}){const active=chapter===7?[4,5]:chapter>=8?[6]:[chapter-3];return <ArchitectureFlow compact active={active}/>}
-function SystemOverview(){return <section className="overview-view"><header><span>THE JURYAI SYSTEM</span><h1>One accountable path from<br/>AI decision to human judgment.</h1><p>JuryAI sits after the bank&apos;s model — before a person accepts its decision.</p></header><ArchitectureFlow active={[0,1,2,3,4,5,6]}/><div className="overview-framing"><span>BANK AI</span><i/><strong>JURYAI · DECISION ASSURANCE LAYER</strong><i/><span>HUMAN EMPLOYEE</span></div><footer>ONE DECISION. <b>MULTIPLE INDEPENDENT CHECKS.</b> ONE ACCOUNTABLE HUMAN.</footer></section>}
-
-function ReviewAlert({scenario,run,onReview,onDecision}:{scenario:ScenarioDefinition;run:DemoRunResult;onReview:()=>void;onDecision:(action:HumanDecision["action"],fallback:string)=>void}){return <section className="alert-view"><PageTitle eyebrow="HUMAN HANDOFF" title="JuryAI has created a review task." copy="The bank employee receives a decision-ready case — not an AI experiment."/><div className="handoff-line"><span>BANK AI</span><Icon name="arrow"/><strong>JURYAI</strong><Icon name="arrow"/><span>HUMAN EMPLOYEE</span></div><article className="review-alert"><header><span><Icon name="alert" size={20}/> JURYAI REVIEW ALERT</span><b>PRIORITY · MATERIAL RISK</b></header><div className="alert-case"><small>CASE</small><strong>{scenario.caseData.id.replace("CASE-","Loan Application ")}</strong><span>Assigned to Lending Operations</span></div><div className="alert-comparison"><p><span>ORIGINAL AI</span><strong>{scenario.initialDecisionLabel} · {scenario.confidence}%</strong></p><Icon name="arrow" size={24}/><p><span>JURYAI</span><strong>{run.review.court.juryVerdict.split} CHALLENGE</strong></p></div><div className="alert-issues"><span>MATERIAL ISSUES</span><p><Icon name="check" size={16}/> Payment-instability claim unsupported</p><p><Icon name="check" size={16}/> Counterfactual sensitivity detected</p></div><div className="alert-required"><span>REQUIRED ACTION</span><strong>HUMAN REVIEW NEEDED</strong></div><footer><button className="primary" onClick={onReview}>REVIEW CASE <Icon name="arrow" size={17}/></button><button onClick={()=>onDecision("approved","The original decision was upheld after human review.")}>UPHOLD ORIGINAL</button><button onClick={()=>onDecision("overridden","The original decision was overridden after human review.")}>OVERRIDE DECISION</button><button onClick={()=>onDecision("review_requested","Additional evidence was requested by the human reviewer.")}>REQUEST MORE EVIDENCE</button></footer></article></section>}
-
-function PageTitle({eyebrow,title,copy}:{eyebrow:string;title:string;copy:string}){return <header className="page-title"><span>{eyebrow}</span><h1>{title}</h1><p>{copy}</p></header>}
-type AgentKind="witness"|"fact"|"bias"|"juror"|"model";
-function AgentNode({active=false,label,kind="model",number}:{active?:boolean;label:string;kind?:AgentKind;number?:number}){return <div className={`agent-node agent-${kind} ${active?"active":""}`}><span className="agent-glyph"><Icon name="node" size={30}/><b>{number??(kind==="witness"?"✓":kind==="fact"?"?":kind==="bias"?"◇":"AI")}</b></span><i/><strong>{label}</strong></div>}
-
-function DecisionView({scenario,started,running,open,onOpen,scenarioId,zone,setScenarioId,setZone,start}:{scenario:ScenarioDefinition;started:boolean;running:boolean;open:boolean;onOpen:()=>void;scenarioId:ScenarioId;zone:ProcessingZoneId;setScenarioId:(id:ScenarioId)=>void;setZone:(id:ProcessingZoneId)=>void;start:()=>void}){
-  return <section className="decision-view"><PageTitle eyebrow="AI-ASSISTED LENDING" title="A bank's AI declined this application." copy="Should one model get the final word?"/><div className="decision-flow"><article className="loan-document"><span>SYNTHETIC LOAN APPLICATION</span><Icon name="file" size={30}/><strong>€{scenario.caseData.applicant.requestedAmountEur.toLocaleString()}</strong><p>{scenario.caseData.applicant.loanPurpose}</p><small>{scenario.caseData.id}</small></article><div className="flow-line"><i/><b>APPLICATION</b></div><div className="scoring-node"><AgentNode active label="CREDIT MODEL"/><ol><li>INPUT RECEIVED</li><li>SCORING</li><li>DECISION GENERATED</li></ol></div><div className="flow-line output"><i/><b>OUTPUT</b></div><button className="original-decision" onClick={onOpen}><span>ORIGINAL AI</span><strong>{scenario.initialDecisionLabel}</strong><b>{scenario.confidence}%</b><p>{scenario.reason.replace(" + "," · ")}</p><small><Icon name="eye" size={13}/> INSPECT INPUTS</small></button></div>{open&&<div className="decision-inspector"><strong>WHAT THE ORIGINAL MODEL USED</strong>{scenario.caseData.initialDecision.dataUsed.map((item)=><span key={item}><Icon name="check" size={12}/>{item}</span>)}</div>}<div className="decision-controls"><label>CASE<select disabled={started} value={scenarioId} onChange={(event)=>setScenarioId(event.target.value as ScenarioId)}>{scenarios.map((item)=><option key={item.id} value={item.id}>{item.shortLabel}</option>)}</select></label><label>PROCESSING<select disabled={started} value={zone} onChange={(event)=>setZone(event.target.value as ProcessingZoneId)}>{processingZones.map((item)=><option key={item.id} value={item.id}>{item.label}</option>)}</select></label><button onClick={start} disabled={started||running}><Icon name="scale" size={20}/>{running?"OPENING TRIAL…":started?"TRIAL READY · USE NEXT":"PUT DECISION ON TRIAL"}<Icon name="arrow" size={18}/></button><span>SYNTHETIC DEMO CASE · NO EXTERNAL CUSTOMER DATA</span></div></section>
+function LandingView({
+  onStart,
+  onOverview,
+}: {
+  onStart: () => void;
+  onOverview: () => void;
+}) {
+  return (
+    <section className="landing-view">
+      <div className="landing-geometry" aria-hidden>
+        <i />
+        <i />
+        <i />
+        <i />
+      </div>
+      <div className="landing-mark">
+        <Brand />
+      </div>
+      <div className="landing-copy">
+        <p>DECISION ASSURANCE FOR HIGH-STAKES AI.</p>
+        <h1>
+          AI SHOULD NOT BE
+          <br />
+          <em>JUDGE, JURY,</em>
+          <br />
+          AND WITNESS.
+        </h1>
+        <div className="landing-actions">
+          <button onClick={onStart}>
+            START REVIEW <Icon name="arrow" size={19} />
+          </button>
+          <button onClick={onOverview}>SEE HOW IT WORKS</button>
+        </div>
+      </div>
+      <footer>
+        <span>BUILT FIRST FOR AI-ASSISTED LENDING.</span>
+      </footer>
+    </section>
+  );
 }
 
-function ProtectPartition({scenario,events,selectedRole,onSelect}:{scenario:ScenarioDefinition;events:TrialEvent[];selectedRole:AgentFinding["role"];onSelect:(role:AgentFinding["role"])=>void}){
-  const route=latest(events,"evidence_partitioned")?.details??{};const selected=agentSpecs.find((item)=>item.role===selectedRole)!;const ids=(route[selectedRole] as string[]|undefined)??[];
-  const fields=[{label:"Name",value:scenario.caseData.applicant.name,state:"removed"},{label:"Age",value:String(scenario.caseData.applicant.age),state:"removed"},{label:"Email",value:"applicant@example.com",state:"removed"},{label:"Account ID",value:"CASE-A71",state:"pseudo"},{label:"Income",value:`€${scenario.caseData.applicant.monthlyIncomeEur.toLocaleString()}`,state:"kept",ids:["EV-01"]},{label:"Debt ratio",value:`${Math.round(scenario.caseData.applicant.debtToIncomeRatio*100)}%`,state:"kept",ids:["EV-03"]},{label:"Credit history",value:"No defaults",state:"kept",ids:["EV-02"]},{label:"Payment context",value:"Verified",state:"kept",ids:["EV-03","EV-04"]},{label:"Postal geography",value:"Purpose-limited",state:"kept",ids:["EV-05"]}];
-  return <section className="protect-view"><PageTitle eyebrow="PROTECT + PARTITION" title="One case becomes minimum-necessary context." copy="Watch identity stop, safe data pass, and three packets form."/><div className="protect-flow"><div className="field-cloud">{fields.map((field,index)=><div key={field.label} style={{"--field-order":index} as CSSProperties} className={`${field.state} ${field.state==="kept"&&field.ids?.some((id)=>ids.includes(id))?"selected":"dim"}`}><span>{field.label}</span><strong>{field.state==="removed"?"BLOCKED":field.value}</strong><small>{field.state==="removed"?"× REMOVED":field.state==="pseudo"?"↻ PSEUDONYMIZED":"✓ PASSED"}</small></div>)}</div><div className="firewall-node"><Icon name="lock" size={34}/><strong>IDENTITY<br/>FIREWALL</strong><i/><span>SAFE CASE</span></div><div className="packet-routes"><header><Icon name="file" size={22}/><strong>SAFE CASE · CASE-A71</strong></header>{agentSpecs.map((agent,index)=>{const packetIds=(route[agent.role] as string[]|undefined)??[];return <button key={agent.role} style={{"--packet-order":index} as CSSProperties} className={selectedRole===agent.role?"selected":""} onClick={()=>onSelect(agent.role)}><i/><span>PACKET {String.fromCharCode(65+index)}</span><strong>{agent.packet}</strong><small>{packetIds.join(" · ")}</small></button>})}</div><aside className="contract-panel"><span>CONTEXT CONTRACT</span><h2>{selected.name}</h2><div><strong>RECEIVES</strong>{ids.map((id)=><b key={id}><Icon name="check" size={15}/>{scenario.caseData.evidence.find((item)=>item.id===id)?.title}</b>)}</div><div className="blocked"><strong>BLOCKED</strong>{selected.blocked.map((item)=><b key={item}>× {item}</b>)}</div></aside></div></section>
+function ArchitectureFlow({
+  compact = false,
+  active = [],
+}: {
+  compact?: boolean;
+  active?: number[];
+}) {
+  const icons: IconName[] = [
+    "node",
+    "lock",
+    "eye",
+    "refresh",
+    "file",
+    "scale",
+    "check",
+  ];
+  return (
+    <div
+      className={compact ? "architecture-flow compact" : "architecture-flow"}
+    >
+      {architecture.map((label, index) => (
+        <div key={label} className={active.includes(index) ? "active" : ""}>
+          <span>
+            <Icon name={icons[index]} size={compact ? 15 : 28} />
+          </span>
+          <strong>{label}</strong>
+          {index < architecture.length - 1 && (
+            <i>
+              <Icon name="arrow" size={compact ? 12 : 18} />
+            </i>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+function SystemMiniMap({ chapter }: { chapter: number }) {
+  const active = chapter === 7 ? [4, 5] : chapter >= 8 ? [6] : [chapter - 3];
+  return <ArchitectureFlow compact active={active} />;
+}
+function SystemOverview() {
+  return (
+    <section className="overview-view">
+      <header>
+        <span>THE JURYAI SYSTEM</span>
+        <h1>
+          From AI decision to
+          <br />
+          accountable human judgment.
+        </h1>
+        <p>
+          JuryAI sits between an AI decision and the human responsible for
+          accepting it.
+        </p>
+      </header>
+      <ArchitectureFlow active={[0, 1, 2, 3, 4, 5, 6]} />
+    </section>
+  );
 }
 
-function IndependentReview({scenario,events,run,step,playing,selectedRole,onSelect,onPlay,onStep,onReplay}:{scenario:ScenarioDefinition;events:TrialEvent[];run:DemoRunResult|null;step:number;playing:boolean;selectedRole:AgentFinding["role"];onSelect:(role:AgentFinding["role"])=>void;onPlay:()=>void;onStep:()=>void;onReplay:()=>void}){
-  const activeIndex=Math.min(2,Math.floor(step/4));const phase=step%4;const selectedIndex=agentSpecs.findIndex((item)=>item.role===selectedRole);const selected=agentSpecs[selectedIndex];const finding=run?.review.findings.find((item)=>item.role===selectedRole);const active=agentSpecs[activeIndex];const activeFinding=run?.review.findings.find((item)=>item.role===active.role);const operations=["SUFFICIENCY GATE","READ ASSIGNED EVIDENCE","MATCH CLAIM TO SOURCES","FINDING SEALED"];
-  const kinds:AgentKind[]=["witness","fact","bias"];const activeEvidence=(latest(events,"sufficiency_gate_checked",active.role)?.evidenceIds??[]);
-  return <section className="review-view"><PageTitle eyebrow="INDEPENDENT REVIEW" title="Watch each specialist work in isolation." copy="Observable operations only. Reasoning remains private."/><div className="playback-controls"><button onClick={onPlay}><Icon name={playing?"pause":"play"} size={17}/>{playing?"PAUSE":"PLAY"}</button><button onClick={onStep}><Icon name="arrow" size={17}/>STEP</button><button onClick={onReplay}><Icon name="refresh" size={17}/>REPLAY</button><span>{active.name} · {operations[phase]}</span></div><div className="agent-rail">{agentSpecs.map((agent,index)=>{const complete=step>=index*4+3;return <button key={agent.role} className={`${index===activeIndex?"active":""} ${selectedRole===agent.role?"selected":""}`} onClick={()=>onSelect(agent.role)}><AgentNode active={index===activeIndex} kind={kinds[index]} label={agent.name}/><small>{complete?"SEALED":index===activeIndex?operations[phase]:"ISOLATED"}</small></button>})}</div><div className="review-canvas"><div className="active-process"><div className={`gate-visual phase-${phase}`}><span>CONTEXT GATE</span><div className="evidence-slots">{activeEvidence.map((id,index)=><b key={id} style={{"--slot-order":index} as CSSProperties}><Icon name="file" size={18}/>{scenario.caseData.evidence.find((item)=>item.id===id)?.title}<Icon name="check" size={15}/></b>)}</div><div className="blocked-fields"><em>Name ×</em><em>Age ×</em><em>Other testimony ×</em></div><strong>{phase===0?"CHECKING CONTEXT":"CONTEXT VALID · GATE OPEN"}</strong></div><Icon name="arrow" size={24}/><div className={`operation-stack ${active.role}`}><AgentNode active={phase>0&&phase<3} kind={kinds[activeIndex]} label={active.name}/>{active.role==="fact_checker"?<div className={`fact-compare phase-${phase}`}><b>PAYMENT INSTABILITY</b><span>PAYMENT HISTORY<small>2 delayed transfers</small></span><i>↕</i><span>BANK MIGRATION NOTICE<small>Temporary delay documented</small></span><strong>{phase>=2?"CONTEXT FOUND":"COMPARING SOURCES"}</strong></div>:<div className={`evidence-link phase-${phase}`}>{activeEvidence.map((id)=><b key={id}>{id}</b>)}<i/><strong>{active.role==="decision_witness"?"AFFORDABILITY":"PROXY SENSITIVITY"}</strong></div>}</div><Icon name="arrow" size={24}/><article className={`sealed-output ${phase===3?"ready":""}`}><Icon name="file" size={28}/><span>STRUCTURED FINDING</span><strong>{active.role==="fact_checker"&&phase>=2?"NOT SUFFICIENTLY SUPPORTED":activeFinding?.recommendation??latest(events,"finding_sealed",active.role)?.summary??"PENDING"}</strong><b><Icon name="lock" size={15}/> SEALED</b></article></div><div className="finding-hold">{agentSpecs.map((agent,index)=><b key={agent.role} className={step>=index*4+3?"arrived":""}><Icon name="lock" size={14}/>{agent.name}<small>SEALED FINDING</small></b>)}</div><div className={`session-clear ${phase===3?"cleared":""}`}><span>SESSION CONTEXT</span>{activeEvidence.map((id)=><b key={id}>{id}</b>)}<i/><strong>{phase===3?"TEMPORARY CONTEXT CLEARED":"ISOLATED SESSION ACTIVE"}</strong></div></div><aside className="agent-inspector"><header><span>INSPECT AGENT</span><strong>{selected.name}</strong></header><div><label>RECEIVED</label><p>{finding?.evidenceReferences.map((id)=>scenario.caseData.evidence.find((item)=>item.id===id)?.title).join(" · ")||"Scoped packet"}</p></div><div className="blocked"><label>BLOCKED</label><p>{selected.blocked.join(" · ")}</p></div><div><label>SEALED OUTPUT</label><p>{finding?.recommendation??latest(events,"finding_sealed",selectedRole)?.summary}</p></div></aside></section>
+function ReviewAlert({
+  scenario,
+  run,
+  onReview,
+}: {
+  scenario: ScenarioDefinition;
+  run: DemoRunResult;
+  onReview: () => void;
+}) {
+  return (
+    <section className="alert-view">
+      <PageTitle
+        eyebrow="HUMAN HANDOFF"
+        title="JuryAI has created a review task."
+        copy="The bank employee receives a decision-ready case — not an AI experiment."
+      />
+      <div className="handoff-line">
+        <span>BANK AI</span>
+        <Icon name="arrow" />
+        <strong>JURYAI</strong>
+        <Icon name="arrow" />
+        <span>HUMAN EMPLOYEE</span>
+      </div>
+      <article className="review-alert">
+        <header>
+          <span><Icon name="alert" size={20} /> JURYAI REVIEW REQUIRED</span>
+          <b>PRIORITY · MATERIAL RISK</b>
+        </header>
+        <div className="alert-case">
+          <small>CASE</small>
+          <strong>Loan Application A71</strong>
+          <span>{scenario.caseData.id} Â· Lending Operations</span>
+        </div>
+        <div className="alert-comparison">
+          <p>
+            <span>ORIGINAL AI</span>
+            <strong>
+              {scenario.initialDecisionLabel} · {scenario.confidence}%
+            </strong>
+          </p>
+          <Icon name="arrow" size={24} />
+          <p>
+            <span>JURYAI</span>
+            <strong>{run.review.court.juryVerdict.split} CHALLENGE</strong>
+          </p>
+        </div>
+        <div className="alert-issues">
+          <span>MATERIAL ISSUES</span>
+          <p>
+            <Icon name="check" size={16} /> Payment-instability claim
+            unsupported
+          </p>
+          <p>
+            <Icon name="check" size={16} /> Counterfactual sensitivity detected
+          </p>
+        </div>
+        <div className="alert-required">
+          <span>REQUIRED ACTION</span>
+          <strong>HUMAN REVIEW NEEDED</strong>
+        </div>
+        <footer>
+          <button className="primary" onClick={onReview}>
+            REVIEW CASE <Icon name="arrow" size={17} />
+          </button>
+        </footer>
+      </article>
+    </section>
+  );
 }
 
-function Challenge({scenario,run,removed,why,onToggle,onWhy}:{scenario:ScenarioDefinition;run:DemoRunResult|null;removed:boolean;why:boolean;onToggle:()=>void;onWhy:()=>void}){
-  const counterfactual=run?.review.counterfactual;return <section className="challenge-view"><PageTitle eyebrow="COUNTERFACTUAL CHALLENGE" title="What if one input changed?" copy="Remove the permitted sensitivity input and observe the decision again."/><div className="counterfactual-lab"><article className="proxy-control"><span>SENSITIVITY INPUT</span><h2>{scenario.sensitivity.label}</h2><p>{removed?scenario.sensitivity.removedValue:scenario.sensitivity.originalValue}</p><button onClick={onToggle} className={removed?"off":"on"}><i/><strong>{removed?"RESTORE INPUT":"REMOVE FROM DECISION"}</strong></button></article><div className="model-path"><div className="mini-case"><Icon name="file" size={25}/><strong>SAFE CASE</strong><span>{removed?"PROXY REMOVED":"PROXY INCLUDED"}</span></div><div className={`removable-input ${removed?"removed":""}`}><b>{scenario.sensitivity.label}</b><i/></div><Icon name="arrow" size={22}/><AgentNode active label="DECISION FUNCTION"/><Icon name="arrow" size={22}/><div className={`counter-result ${removed?"changed":""}`}><span>RECOMMENDATION</span><strong>{removed?(counterfactual?.counterfactualRecommendation??"approve"):(counterfactual?.baselineRecommendation??"decline")}</strong></div></div><div className={`sensitivity-result ${removed?"visible":""}`}><Icon name="alert" size={25}/><span>OUTCOME CHANGED</span><strong>COUNTERFACTUAL SENSITIVITY DETECTED</strong><p>Changing this input changed the outcome, so JuryAI requires further review.</p><button onClick={onWhy}>WHY DOES THIS MATTER?</button>{why&&<aside>This detects outcome sensitivity. It does not prove discrimination; it creates an auditable reason for human review.</aside>}</div></div></section>
+function PageTitle({
+  eyebrow,
+  title,
+  copy,
+}: {
+  eyebrow: string;
+  title: string;
+  copy: string;
+}) {
+  return (
+    <header className="page-title">
+      <span>{eyebrow}</span>
+      <h1>{title}</h1>
+      <p>{copy}</p>
+    </header>
+  );
+}
+type AgentKind = "witness" | "fact" | "bias" | "juror" | "model";
+function AgentNode({
+  active = false,
+  label,
+  kind = "model",
+  number,
+}: {
+  active?: boolean;
+  label: string;
+  kind?: AgentKind;
+  number?: number;
+}) {
+  return (
+    <div className={`agent-node agent-${kind} ${active ? "active" : ""}`}>
+      <span className="agent-glyph">
+        <Icon name="node" size={30} />
+        <b>
+          {number ??
+            (kind === "witness"
+              ? "✓"
+              : kind === "fact"
+                ? "?"
+                : kind === "bias"
+                  ? "◇"
+                  : "AI")}
+        </b>
+      </span>
+      <i />
+      <strong>{label}</strong>
+    </div>
+  );
 }
 
-function ClerkJury({run,packetOpen,onPacket,selectedJuror,onJuror,revealed,onReveal}:{run:DemoRunResult|null;packetOpen:boolean;onPacket:()=>void;selectedJuror:number;onJuror:(index:number)=>void;revealed:boolean;onReveal:()=>void}){
-  const votes=run?.review.court.jurorVotes??[];const packet=run?.review.court.casePacket;const views=["Evidence-first","Claim-first","Contradiction-first"];const structures=["Verified → disputed → risks → counterfactual","Claim → evidence → confidence → risks","Contradictions → support → counterfactual → risks"];const orders=[["EV-01","EV-02","EV-03","EV-04","EV-05"],["EV-03","EV-04","EV-01","EV-02","EV-05"],["EV-04","EV-03","EV-05","EV-02","EV-01"]];const safeguards=run?.review.court.juryVerdict.safeguardTriggers??[];
-  return <section className="jury-view"><PageTitle eyebrow="CLERK + JURY" title="Three findings become one independently reviewed case." copy="The Clerk assembles. Jurors receive the same facts in three neutral views."/><div className="clerk-jury-flow"><div className="finding-stack">{agentSpecs.map((agent,index)=><article key={agent.role} style={{"--finding-order":index} as CSSProperties}><Icon name="lock" size={16}/><span>{agent.name}</span><strong>SEALED</strong></article>)}</div><Icon name="arrow" size={24}/><button className="clerk-node" onClick={onPacket}><span>DETERMINISTIC CLERK</span><strong>Validate sources ✓</strong><strong>Preserve provenance ✓</strong><strong>Remove duplicates ✓</strong><b><Icon name="file" size={20}/> CASEPACKET</b><small>CLICK TO INSPECT</small></button><div className="branch-lines"><i/><i/><i/></div><div className="juror-nodes">{views.map((view,index)=><button key={view} className={selectedJuror===index?"selected":""} onClick={()=>onJuror(index)}><AgentNode active kind="juror" number={index+1} label={`JUROR ${index+1}`}/><span>{view}</span><div className={`juror-evidence order-${index}`}>{orders[index].map((id)=><i key={id}>{id}</i>)}</div><b><Icon name="lock" size={15}/>{revealed?(votes[index]?.vote??"sealed").replace("_"," "):"VOTE SEALED"}</b></button>)}</div></div><div className="jury-inspection">{packetOpen?<article><span>CASEPACKET</span><p>{packet?.verifiedFindings.length} verified · {packet?.evidenceReferences.join(" · ")}</p></article>:<article><span>JUROR {selectedJuror+1} · {views[selectedJuror]}</span><p>{structures[selectedJuror]}</p><p>Key evidence: {votes[selectedJuror]?.keyEvidenceIds.join(" · ")}</p></article>}<div>{!revealed?<button onClick={onReveal}><Icon name="eye" size={18}/>REVEAL VOTES</button>:<><span>SIMULTANEOUS REVEAL</span><strong>{run?.review.court.juryVerdict.split}</strong><p>{votes.map((vote)=>vote.vote.replace("_"," ")).join(" · ")}</p></>}</div></div>{revealed&&<div className="safeguard-strip"><Icon name="alert" size={20}/><strong>SAFEGUARD INTERRUPT</strong><span>{safeguards.slice(0,2).join(" · ")}</span><b>HUMAN REVIEW REQUIRED</b></div>}</section>
+function DecisionView({
+  scenario,
+  started,
+  running,
+  open,
+  onOpen,
+  scenarioId,
+  zone,
+  setScenarioId,
+  setZone,
+  start,
+}: {
+  scenario: ScenarioDefinition;
+  started: boolean;
+  running: boolean;
+  open: boolean;
+  onOpen: () => void;
+  scenarioId: ScenarioId;
+  zone: ProcessingZoneId;
+  setScenarioId: (id: ScenarioId) => void;
+  setZone: (id: ProcessingZoneId) => void;
+  start: () => void;
+}) {
+  return (
+    <section className="decision-view">
+      <PageTitle
+        eyebrow="AI-ASSISTED LENDING"
+        title="A bank's AI declined this application."
+        copy="Should one model get the final word?"
+      />
+      <div className="decision-flow">
+        <article className="loan-document">
+          <span>SYNTHETIC LOAN APPLICATION</span>
+          <Icon name="file" size={30} />
+          <strong>
+            €{scenario.caseData.applicant.requestedAmountEur.toLocaleString()}
+          </strong>
+          <p>{scenario.caseData.applicant.loanPurpose}</p>
+          <small>{scenario.caseData.id}</small>
+        </article>
+        <div className="flow-line">
+          <i />
+          <b>APPLICATION</b>
+        </div>
+        <div className="scoring-node">
+          <AgentNode active label="CREDIT MODEL" />
+          <ol>
+            <li>INPUT RECEIVED</li>
+            <li>SCORING</li>
+            <li>DECISION GENERATED</li>
+          </ol>
+        </div>
+        <div className="flow-line output">
+          <i />
+          <b>OUTPUT</b>
+        </div>
+        <button className="original-decision" onClick={onOpen}>
+          <span>ORIGINAL AI</span>
+          <strong>{scenario.initialDecisionLabel}</strong>
+          <b>{scenario.confidence}%</b>
+          <p>{scenario.reason.replace(" + ", " · ")}</p>
+          <small>
+            <Icon name="eye" size={13} /> INSPECT INPUTS
+          </small>
+        </button>
+      </div>
+      {open && (
+        <div className="decision-inspector">
+          <strong>WHAT THE ORIGINAL MODEL USED</strong>
+          {scenario.caseData.initialDecision.dataUsed.map((item) => (
+            <span key={item}>
+              <Icon name="check" size={12} />
+              {item}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="decision-controls">
+        <label>
+          CASE
+          <select
+            disabled={started}
+            value={scenarioId}
+            onChange={(event) =>
+              setScenarioId(event.target.value as ScenarioId)
+            }
+          >
+            {scenarios.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.shortLabel}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          PROCESSING
+          <select
+            disabled={started}
+            value={zone}
+            onChange={(event) =>
+              setZone(event.target.value as ProcessingZoneId)
+            }
+          >
+            {processingZones.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button onClick={start} disabled={started || running}>
+          <Icon name="scale" size={20} />
+          {running
+            ? "OPENING TRIAL…"
+            : started
+              ? "TRIAL READY · USE NEXT"
+              : "PUT DECISION ON TRIAL"}
+          <Icon name="arrow" size={18} />
+        </button>
+        <span>SYNTHETIC DEMO CASE · NO EXTERNAL CUSTOMER DATA</span>
+      </div>
+    </section>
+  );
 }
 
-function HumanReview({scenario,events,run,decision,question,onAsk,reason,onReason,decide}:{scenario:ScenarioDefinition;events:TrialEvent[];run:DemoRunResult;decision:HumanDecision|null;question:string;onAsk:(value:string)=>void;reason:string;onReason:(value:string)=>void;decide:(action:HumanDecision["action"],fallback:string)=>void}){
-  const answer=question?answerFromTrialRecord(question,scenario,run,events):null;
-  return <section className="human-view"><PageTitle eyebrow="HUMAN REVIEW" title="Question the decision before you own it." copy="Answers animate the same structured record the jury reviewed."/><div className="human-workspace"><ReviewMap scenario={scenario} run={run} answer={answer}/><AskJuryAI question={question} answer={answer} onAsk={onAsk}/><aside className="decision-actions"><label>OPTIONAL REVIEWER REASON<textarea value={reason} onChange={(event)=>onReason(event.target.value)} placeholder="Add a reason to the audit record…"/></label>{decision?<div className="decision-recorded"><Icon name="check" size={26}/><strong>DECISION RECORDED</strong><p>{decision.reason}</p></div>:<div className="action-buttons"><button className="primary" onClick={()=>decide("overridden",`Accepted jury outcome: ${scenario.judgeIssues.join("; ")}.`)}>ACCEPT JURY OUTCOME<span>OVERTURN AUTOMATED DECISION</span></button><button onClick={()=>decide("approved","Original decision upheld after independent human review.")}>UPHOLD ORIGINAL</button><button onClick={()=>decide("review_requested","Further evidence requested before final disposition.")}>REQUEST FURTHER REVIEW</button></div>}</aside></div></section>
+function ProtectPartition({
+  scenario,
+  events,
+  selectedRole,
+  open,
+  onSelect,
+  onClose,
+}: {
+  scenario: ScenarioDefinition;
+  events: TrialEvent[];
+  selectedRole: AgentFinding["role"];
+  open: boolean;
+  onSelect: (role: AgentFinding["role"]) => void;
+  onClose: () => void;
+}) {
+  const route = latest(events, "evidence_partitioned")?.details ?? {};
+  const selected = agentSpecs.find((item) => item.role === selectedRole)!;
+  const ids = (route[selectedRole] as string[] | undefined) ?? [];
+  const fields = [
+    {
+      label: "Name",
+      value: scenario.caseData.applicant.name,
+      state: "removed",
+    },
+    {
+      label: "Age",
+      value: String(scenario.caseData.applicant.age),
+      state: "removed",
+    },
+    { label: "Email", value: "applicant@example.com", state: "removed" },
+    { label: "Account ID", value: "CASE-A71", state: "pseudo" },
+    {
+      label: "Income",
+      value: `€${scenario.caseData.applicant.monthlyIncomeEur.toLocaleString()}`,
+      state: "kept",
+      ids: ["EV-01"],
+    },
+    {
+      label: "Debt ratio",
+      value: `${Math.round(scenario.caseData.applicant.debtToIncomeRatio * 100)}%`,
+      state: "kept",
+      ids: ["EV-03"],
+    },
+    {
+      label: "Credit history",
+      value: "No defaults",
+      state: "kept",
+      ids: ["EV-02"],
+    },
+    {
+      label: "Payment context",
+      value: "Verified",
+      state: "kept",
+      ids: ["EV-03", "EV-04"],
+    },
+    {
+      label: "Postal geography",
+      value: "Purpose-limited",
+      state: "kept",
+      ids: ["EV-05"],
+    },
+  ];
+  return (
+    <section className="protect-view">
+      <PageTitle
+        eyebrow="PROTECT + PARTITION"
+        title="One case becomes minimum-necessary context."
+        copy="Watch identity stop, safe data pass, and three packets form."
+      />
+      <div className="protect-flow">
+        <div className="field-cloud">
+          {fields.map((field, index) => (
+            <div
+              key={field.label}
+              style={{ "--field-order": index } as CSSProperties}
+              className={`${field.state} ${field.state === "kept" && field.ids?.some((id) => ids.includes(id)) ? "selected" : "dim"}`}
+            >
+              <span>{field.label}</span>
+              <strong>
+                {field.state === "removed" ? "BLOCKED" : field.value}
+              </strong>
+              <small>
+                {field.state === "removed"
+                  ? "× REMOVED"
+                  : field.state === "pseudo"
+                    ? "↻ PSEUDONYMIZED"
+                    : "✓ PASSED"}
+              </small>
+            </div>
+          ))}
+        </div>
+        <div className="firewall-node">
+          <Icon name="lock" size={34} />
+          <strong>
+            IDENTITY
+            <br />
+            FIREWALL
+          </strong>
+          <i />
+          <span>SAFE CASE</span>
+        </div>
+        <div className="packet-routes">
+          <header>
+            <Icon name="file" size={22} />
+            <strong>SAFE CASE · CASE-A71</strong>
+          </header>
+          {agentSpecs.map((agent, index) => {
+            const packetIds = (route[agent.role] as string[] | undefined) ?? [];
+            return (
+              <button
+                key={agent.role}
+                style={{ "--packet-order": index } as CSSProperties}
+                className={selectedRole === agent.role ? "selected" : ""}
+                onClick={() => onSelect(agent.role)}
+              >
+                <i />
+                <span>PACKET {String.fromCharCode(65 + index)}</span>
+                <strong>{agent.packet}</strong>
+                <small>{packetIds.join(" · ")}</small>
+              </button>
+            );
+          })}
+        </div>
+        {open && <aside className="contract-panel compact-contract">
+          <button className="contract-close" onClick={onClose} aria-label="Close context contract">Ã—</button>
+          <span>CONTEXT CONTRACT</span>
+          <h2>{selected.name}</h2>
+          <div>
+            <strong>RECEIVES</strong>
+            {ids.map((id) => (
+              <b key={id}>
+                <Icon name="check" size={15} />
+                {
+                  scenario.caseData.evidence.find((item) => item.id === id)
+                    ?.title
+                }
+              </b>
+            ))}
+          </div>
+          <div className="blocked">
+            <strong>BLOCKED</strong>
+            {selected.blocked.map((item) => (
+              <b key={item}>× {item}</b>
+            ))}
+          </div>
+        </aside>}
+      </div>
+    </section>
+  );
 }
 
-function ReviewMap({scenario,run,answer}:{scenario:ScenarioDefinition;run:DemoRunResult;answer:ExplainabilityAnswer|null}){const sources=answer?.sources??[];return <aside className="review-map"><div className="review-metrics"><p><span>ORIGINAL AI</span><strong>{scenario.initialDecisionLabel} · {scenario.confidence}%</strong></p><Icon name="arrow" size={20}/><p><span>JURY</span><strong>{run.review.court.juryVerdict.split}</strong></p></div><div className="evidence-path">{scenario.caseData.evidence.map((item)=><b key={item.id} className={sources.includes(item.id)?"highlight":""}>{item.id}<small>{item.title}</small></b>)}</div><ExplanationVisual answer={answer}/></aside>}
-
-function ExplanationVisual({answer}:{answer:ExplainabilityAnswer|null}){const intent=answer?.intent??"unknown";if(!answer)return <div className="question-visual idle"><Icon name="file" size={34}/><strong>ASK THE RECORD</strong><span>Evidence · context · safeguards</span></div>;if(intent==="evidence_support")return <div className="question-visual fact-flow" key={answer.heading}><div><b>PAYMENT HISTORY</b><span>2 delayed transfers</span></div><i/><AgentNode active kind="fact" label="FACT CHECKER"/><i/><div><b>BANK MIGRATION</b><span>Context found</span></div><strong>NOT SUPPORTED</strong></div>;if(intent==="privacy")return <div className="question-visual firewall-flow" key={answer.heading}>{["Name","Age","Email","Exact identity"].map((item)=><b key={item}>{item}<span>×</span></b>)}<div><Icon name="lock" size={28}/><strong>IDENTITY FIREWALL</strong></div></div>;if(intent==="counterfactual")return <div className="question-visual counter-flow" key={answer.heading}><div><span>WITH GEOGRAPHY</span><b>DECLINE</b></div><Icon name="arrow" size={24}/><div><span>WITHOUT GEOGRAPHY</span><b>APPROVE</b></div><strong>OUTCOME CHANGED</strong></div>;if(intent==="context_access")return <div className="question-visual access-flow" key={answer.heading}><div><b>SCOPED PACKET</b>{answer.sources.map((source)=><span key={source}>{source} ✓</span>)}</div><Icon name="arrow" size={24}/><AgentNode active kind="witness" label="AUTHORIZED CONTEXT"/><strong>OTHER DATA BLOCKED</strong></div>;if(intent==="human_review")return <div className="question-visual safeguard-flow" key={answer.heading}><b>FACTUAL RISK</b><b>OUTCOME SENSITIVITY</b><Icon name="arrow" size={24}/><strong>HUMAN REVIEW</strong></div>;return <div className="question-visual record-flow" key={answer.heading}><Icon name="file" size={32}/><strong>STRUCTURED CASE RECORD</strong><span>{answer.highlights.slice(0,3).join(" · ")}</span></div>}
-
-function AskJuryAI({question,answer,onAsk}:{question:string;answer:ExplainabilityAnswer|null;onAsk:(value:string)=>void}){
-  const [draft,setDraft]=useState(question);const suggestions=["Why was this decision challenged?","What evidence mattered most?","Why did the Fact Checker disagree?","What did the Decision Witness see?","What information was hidden?","Why did geography matter?","What would make JuryAI uphold the decline?","Why is human review required?"];
-  const submit=(event:FormEvent)=>{event.preventDefault();if(draft.trim())onAsk(draft.trim())};const ask=(value:string)=>{setDraft(value);onAsk(value)};
-  return <section className="ask-panel"><header><Icon name="scale" size={20}/><strong>ASK JURYAI</strong><span>STRUCTURED RECORD ONLY</span></header><form onSubmit={submit}><input aria-label="Ask JuryAI" value={draft} onChange={(event)=>setDraft(event.target.value)} placeholder="Ask why this decision was challenged…"/><button aria-label="Submit question"><Icon name="arrow" size={20}/></button></form><div className="suggestions">{suggestions.map((item)=><button key={item} onClick={()=>ask(item)}>{item}</button>)}</div>{answer?<article className="record-answer" key={question}><span>{answer.heading}</span>{answer.paragraphs.map((paragraph)=><p key={paragraph}>{paragraph}</p>)}<footer><strong>SOURCES</strong>{answer.sources.length?answer.sources.map((source)=><b key={source}>{source}</b>):<em>Structured case record</em>}</footer></article>:<article className="answer-empty"><strong>Ask “why?”, “what evidence?”, or “what was hidden?”</strong></article>}</section>
+function IndependentReview({
+  scenario,
+  events,
+  run,
+  step,
+  playing,
+  selectedRole,
+  onSelect,
+  onPlay,
+  onStep,
+  onReplay,
+}: {
+  scenario: ScenarioDefinition;
+  events: TrialEvent[];
+  run: DemoRunResult | null;
+  step: number;
+  playing: boolean;
+  selectedRole: AgentFinding["role"];
+  onSelect: (role: AgentFinding["role"]) => void;
+  onPlay: () => void;
+  onStep: () => void;
+  onReplay: () => void;
+}) {
+  const activeIndex = agentSpecs.findIndex(
+    (item) => item.role === selectedRole,
+  );
+  const phase = Math.min(4, step);
+  const selectedIndex = activeIndex;
+  const selected = agentSpecs[selectedIndex];
+  const finding = run?.review.findings.find(
+    (item) => item.role === selectedRole,
+  );
+  const active = selected;
+  const activeFinding = finding;
+  const operations = [
+    "SUFFICIENCY GATE",
+    "EVIDENCE ENTERS",
+    "CHECKING CLAIM",
+    "FINDING SEALED",
+    "TEMPORARY CONTEXT CLEARED",
+  ];
+  const questions = [
+    "Does the financial evidence support the decision?",
+    "Are the AI's stated reasons true?",
+    "Did a sensitive or proxy input change the outcome?",
+  ];
+  const kinds: AgentKind[] = ["witness", "fact", "bias"];
+  const activeEvidence =
+    latest(events, "sufficiency_gate_checked", active.role)?.evidenceIds ?? [];
+  return (
+    <section className="review-view">
+      <PageTitle
+        eyebrow="INDEPENDENT REVIEW"
+        title="Watch each specialist work in isolation."
+        copy="Observable operations only. Reasoning remains private."
+      />
+      <div className="playback-controls">
+        <button onClick={onPlay}>
+          <Icon name={playing ? "pause" : "play"} size={17} />
+          {playing ? "PAUSE" : "PLAY"}
+        </button>
+        <button onClick={onStep}>
+          <Icon name="arrow" size={17} />
+          STEP
+        </button>
+        <button onClick={onReplay}>
+          <Icon name="refresh" size={17} />
+          REPLAY
+        </button>
+        <span>
+          {active.name} · {operations[phase]}
+        </span>
+      </div>
+      <div className="agent-rail">
+        {agentSpecs.map((agent, index) => {
+          const complete = index === activeIndex && phase >= 3;
+          return (
+            <button
+              key={agent.role}
+              className={`${index === activeIndex ? "active" : ""} ${selectedRole === agent.role ? "selected" : ""}`}
+              onClick={() => onSelect(agent.role)}
+            >
+              <AgentNode
+                active={index === activeIndex}
+                kind={kinds[index]}
+                label={agent.name}
+              />
+              <small>
+                {complete
+                  ? "SEALED"
+                  : index === activeIndex
+                    ? operations[phase]
+                    : "ISOLATED"}
+              </small>
+              <p>{questions[index]}</p>
+            </button>
+          );
+        })}
+      </div>
+      <div className="review-canvas">
+        <div className="active-process">
+          <div className={`gate-visual phase-${phase}`}>
+            <span>CONTEXT GATE</span>
+            <div className="evidence-slots">
+              {activeEvidence.map((id, index) => (
+                <b key={id} style={{ "--slot-order": index } as CSSProperties}>
+                  <Icon name="file" size={18} />
+                  {
+                    scenario.caseData.evidence.find((item) => item.id === id)
+                      ?.title
+                  }
+                  <Icon name="check" size={15} />
+                </b>
+              ))}
+            </div>
+            <div className="blocked-fields">
+              <em>Name ×</em>
+              <em>Age ×</em>
+              <em>Other testimony ×</em>
+            </div>
+            <strong>
+              {phase === 0 ? "CHECKING CONTEXT" : "CONTEXT VALID · GATE OPEN"}
+            </strong>
+          </div>
+          <Icon name="arrow" size={24} />
+          <div className={`operation-stack ${active.role}`}>
+            <AgentNode
+              active={phase > 0 && phase < 3}
+              kind={kinds[activeIndex]}
+              label={active.name}
+            />
+            {active.role === "fact_checker" ? (
+              <div className={`fact-compare phase-${phase}`}>
+                <b>PAYMENT INSTABILITY</b>
+                <span>
+                  PAYMENT HISTORY<small>2 delayed transfers</small>
+                </span>
+                <i>↕</i>
+                <span>
+                  BANK MIGRATION NOTICE<small>Temporary delay documented</small>
+                </span>
+                <strong>
+                  {phase >= 2 ? "CONTEXT FOUND" : "COMPARING SOURCES"}
+                </strong>
+              </div>
+            ) : (
+              <div className={`evidence-link phase-${phase}`}>
+                {activeEvidence.map((id) => (
+                  <b key={id}>{id}</b>
+                ))}
+                <i />
+                <strong>
+                  {active.role === "decision_witness"
+                    ? "AFFORDABILITY"
+                    : "PROXY SENSITIVITY"}
+                </strong>
+              </div>
+            )}
+          </div>
+          <Icon name="arrow" size={24} />
+          <article className={`sealed-output ${phase === 3 ? "ready" : ""}`}>
+            <Icon name="file" size={28} />
+            <span>STRUCTURED FINDING</span>
+            <strong>
+              {active.role === "fact_checker" && phase >= 2
+                ? "NOT SUFFICIENTLY SUPPORTED"
+                : (activeFinding?.recommendation ??
+                  latest(events, "finding_sealed", active.role)?.summary ??
+                  "PENDING")}
+            </strong>
+            <b>
+              <Icon name="lock" size={15} /> SEALED
+            </b>
+          </article>
+        </div>
+        <div className="finding-hold">
+          {agentSpecs.map((agent, index) => (
+            <b
+              key={agent.role}
+              className={step >= index * 4 + 3 ? "arrived" : ""}
+            >
+              <Icon name="lock" size={14} />
+              {agent.name}
+              <small>SEALED FINDING</small>
+            </b>
+          ))}
+        </div>
+        <div className={`session-clear ${phase === 4 ? "cleared" : ""}`}>
+          <span>SESSION CONTEXT</span>
+          {activeEvidence.map((id) => (
+            <b key={id}>{id}</b>
+          ))}
+          <i />
+          <strong>
+            {phase === 4
+              ? "TEMPORARY CONTEXT CLEARED"
+              : "ISOLATED SESSION ACTIVE"}
+          </strong>
+        </div>
+      </div>
+      <aside className="agent-inspector">
+        <header>
+          <span>INSPECT AGENT</span>
+          <strong>{selected.name}</strong>
+        </header>
+        <div>
+          <label>RECEIVED</label>
+          <p>
+            {finding?.evidenceReferences
+              .map(
+                (id) =>
+                  scenario.caseData.evidence.find((item) => item.id === id)
+                    ?.title,
+              )
+              .join(" · ") || "Scoped packet"}
+          </p>
+        </div>
+        <div className="blocked">
+          <label>BLOCKED</label>
+          <p>{selected.blocked.join(" · ")}</p>
+        </div>
+        <div>
+          <label>SEALED OUTPUT</label>
+          <p>
+            {finding?.recommendation ??
+              latest(events, "finding_sealed", selectedRole)?.summary}
+          </p>
+        </div>
+      </aside>
+    </section>
+  );
 }
 
-function DecisionRecord({scenario,zoneLabel,events,run,decision,restart}:{scenario:ScenarioDefinition;zoneLabel:string;events:TrialEvent[];run:DemoRunResult;decision:HumanDecision;restart:()=>void}){
-  const final=decision.action==="overridden"?"OVERTURNED":decision.action==="approved"?"UPHELD":"FURTHER REVIEW";const timeline=["AI decision","Identity firewall","3 specialists","Counterfactual","Clerk","Jury","Human"];const controls=["Human oversight","Traceability","Data minimization","Least privilege","Fairness test","Stateless review"];
-  return <section className="record-view"><PageTitle eyebrow="DECISION RECORD" title="Case review complete." copy={`${scenario.caseData.id} · ${zoneLabel} · ${events.length} timestamped events`}/><div className="record-outcome"><span>FINAL HUMAN DECISION</span><strong>{final}</strong><p>{decision.reason}</p><b><Icon name="check" size={18}/> RECORD SEALED</b></div><div className="record-timeline">{timeline.map((item,index)=><div key={item}><span>{String(index+1).padStart(2,"0")}</span><i/><strong>{item}</strong></div>)}</div><div className="record-bottom"><article><span>WHY IT CHANGED</span><h2>{run.review.court.juryVerdict.split}</h2>{scenario.judgeIssues.map((issue)=><p key={issue}><Icon name="check" size={16}/>{issue}</p>)}</article><article><span>CONTROLS DEMONSTRATED</span><div>{controls.map((control)=><p key={control}><Icon name="check" size={15}/>{control}</p>)}</div></article><aside><strong>GOVERN THE DECISION,<br/>NOT JUST THE MODEL.</strong><p>JuryAI · Decision assurance for AI-assisted lending.</p><button onClick={restart}><Icon name="refresh" size={16}/>RESTART CASE</button></aside></div></section>
+function Challenge({
+  scenario,
+  run,
+  removed,
+  why,
+  onToggle,
+  onWhy,
+}: {
+  scenario: ScenarioDefinition;
+  run: DemoRunResult | null;
+  removed: boolean;
+  why: boolean;
+  onToggle: () => void;
+  onWhy: () => void;
+}) {
+  const counterfactual = run?.review.counterfactual;
+  return (
+    <section className="challenge-view">
+      <PageTitle
+        eyebrow="COUNTERFACTUAL CHALLENGE"
+        title="What if one input changed?"
+        copy="Remove the permitted sensitivity input and observe the decision again."
+      />
+      <div className="counterfactual-lab">
+        <article className="proxy-control">
+          <span>SENSITIVITY INPUT</span>
+          <h2>{scenario.sensitivity.label}</h2>
+          <p>
+            {removed
+              ? scenario.sensitivity.removedValue
+              : scenario.sensitivity.originalValue}
+          </p>
+          <button onClick={onToggle} className={removed ? "off" : "on"}>
+            <i />
+            <strong>
+              {removed ? "RESTORE INPUT" : "REMOVE FROM DECISION"}
+            </strong>
+          </button>
+        </article>
+        <div className="model-path">
+          <div className="mini-case">
+            <Icon name="file" size={25} />
+            <strong>SAFE CASE</strong>
+            <span>{removed ? "PROXY REMOVED" : "PROXY INCLUDED"}</span>
+          </div>
+          <div className={`removable-input ${removed ? "removed" : ""}`}>
+            <b>{scenario.sensitivity.label}</b>
+            <i />
+          </div>
+          <Icon name="arrow" size={22} />
+          <AgentNode active label="DECISION FUNCTION" />
+          <Icon name="arrow" size={22} />
+          <div className={`counter-result ${removed ? "changed" : ""}`}>
+            <span>RECOMMENDATION</span>
+            <strong>
+              {removed
+                ? (counterfactual?.counterfactualRecommendation ?? "approve")
+                : (counterfactual?.baselineRecommendation ?? "decline")}
+            </strong>
+          </div>
+        </div>
+        <div className={`sensitivity-result ${removed ? "visible" : ""}`}>
+          <Icon name="alert" size={25} />
+          <span>OUTCOME CHANGED</span>
+          <strong>COUNTERFACTUAL SENSITIVITY DETECTED</strong>
+          <p>
+            Changing this input changed the outcome, so JuryAI requires further
+            review.
+          </p>
+          <button onClick={onWhy}>WHY DOES THIS MATTER?</button>
+          {why && (
+            <aside>
+              This detects outcome sensitivity. It does not prove
+              discrimination; it creates an auditable reason for human review.
+            </aside>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ClerkJury({
+  run,
+  packetOpen,
+  onPacket,
+  selectedJuror,
+  onJuror,
+  revealed,
+  onReveal,
+}: {
+  run: DemoRunResult | null;
+  packetOpen: boolean;
+  onPacket: () => void;
+  selectedJuror: number;
+  onJuror: (index: number) => void;
+  revealed: boolean;
+  onReveal: () => void;
+}) {
+  const votes = run?.review.court.jurorVotes ?? [];
+  const packet = run?.review.court.casePacket;
+  const views = ["Evidence-first", "Claim-first", "Contradiction-first"];
+  const structures = [
+    "Verified → disputed → risks → counterfactual",
+    "Claim → evidence → confidence → risks",
+    "Contradictions → support → counterfactual → risks",
+  ];
+  const orders = [
+    ["Income", "Credit", "Payments", "Bank context", "Geography"],
+    ["Payments", "Bank context", "Income", "Credit", "Geography"],
+    ["Bank context", "Payments", "Geography", "Credit", "Income"],
+  ];
+  const safeguards = run?.review.court.juryVerdict.safeguardTriggers ?? [];
+  return (
+    <section className="jury-view">
+      <PageTitle
+        eyebrow="CLERK + JURY"
+        title="Three findings become one independently reviewed case."
+        copy="The Clerk assembles. Jurors receive the same facts in three neutral views."
+      />
+      <div className="clerk-jury-flow">
+        <div className="finding-stack">
+          {agentSpecs.map((agent, index) => (
+            <article
+              key={agent.role}
+              style={{ "--finding-order": index } as CSSProperties}
+            >
+              <Icon name="lock" size={16} />
+              <span>{agent.name}</span>
+              <strong>SEALED</strong>
+            </article>
+          ))}
+        </div>
+        <Icon name="arrow" size={24} />
+        <button className="clerk-node" onClick={onPacket}>
+          <span>DETERMINISTIC CLERK</span>
+          <strong>Validate sources ✓</strong>
+          <strong>Preserve provenance ✓</strong>
+          <strong>Remove duplicates ✓</strong>
+          <b>
+            <Icon name="file" size={20} /> CASEPACKET
+          </b>
+          <small>CLICK TO INSPECT</small>
+        </button>
+        <div className="branch-lines">
+          <i />
+          <i />
+          <i />
+        </div>
+        <div className="juror-nodes">
+          {views.map((view, index) => (
+            <button
+              key={view}
+              className={selectedJuror === index ? "selected" : ""}
+              onClick={() => onJuror(index)}
+            >
+              <AgentNode
+                active
+                kind="juror"
+                number={index + 1}
+                label={`JUROR ${index + 1}`}
+              />
+              <span>{view}</span>
+              <div className={`juror-evidence order-${index}`}>
+                {orders[index].map((label) => (
+                  <i key={label}>{label}</i>
+                ))}
+              </div>
+              <b>
+                <Icon name="lock" size={15} />
+                {revealed
+                  ? (votes[index]?.vote ?? "sealed").replace("_", " ")
+                  : "VOTE SEALED"}
+              </b>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="jury-inspection">
+        {packetOpen ? (
+          <article>
+            <span>CASEPACKET</span>
+            <p>
+              {packet?.verifiedFindings.length} verified ·{" "}
+              {packet?.evidenceReferences.join(" · ")}
+            </p>
+          </article>
+        ) : (
+          <article>
+            <span>
+              JUROR {selectedJuror + 1} · {views[selectedJuror]}
+            </span>
+            <p>{structures[selectedJuror]}</p>
+            <p>
+              Key evidence: {votes[selectedJuror]?.keyEvidenceIds.join(" · ")}
+            </p>
+          </article>
+        )}
+        <div>
+          {!revealed ? (
+            <button onClick={onReveal}>
+              <Icon name="eye" size={18} />
+              REVEAL VOTES
+            </button>
+          ) : (
+            <>
+              <span>SIMULTANEOUS REVEAL</span>
+              <strong>{run?.review.court.juryVerdict.split}</strong>
+              <p>
+                {votes.map((vote) => vote.vote.replace("_", " ")).join(" · ")}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+      {revealed && (
+        <div className="safeguard-strip">
+          <Icon name="alert" size={20} />
+          <strong>SAFEGUARD INTERRUPT</strong>
+          <span>{safeguards.slice(0, 2).join(" · ")}</span>
+          <b>HUMAN REVIEW REQUIRED</b>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function HumanReview({
+  scenario,
+  events,
+  run,
+  decision,
+  question,
+  onAsk,
+  reason,
+  onReason,
+  decide,
+}: {
+  scenario: ScenarioDefinition;
+  events: TrialEvent[];
+  run: DemoRunResult;
+  decision: HumanDecision | null;
+  question: string;
+  onAsk: (value: string) => void;
+  reason: string;
+  onReason: (value: string) => void;
+  decide: (action: HumanDecision["action"], fallback: string) => void;
+}) {
+  const answer = question
+    ? answerFromTrialRecord(question, scenario, run, events)
+    : null;
+  return (
+    <section className="human-view">
+      <PageTitle
+        eyebrow="HUMAN REVIEW"
+        title="Question the decision before you own it."
+        copy="Answers animate the same structured record the jury reviewed."
+      />
+      <div className="human-workspace">
+        <ReviewMap scenario={scenario} run={run} answer={answer} />
+        <AskJuryAI question={question} answer={answer} onAsk={onAsk} />
+        <aside className="decision-actions">
+          <label>
+            OPTIONAL REVIEWER REASON
+            <textarea
+              value={reason}
+              onChange={(event) => onReason(event.target.value)}
+              placeholder="Add a reason to the audit record…"
+            />
+          </label>
+          {decision ? (
+            <div className="decision-recorded">
+              <Icon name="check" size={26} />
+              <strong>DECISION RECORDED</strong>
+              <p>{decision.reason}</p>
+            </div>
+          ) : (
+            <div className="action-buttons">
+              <button
+                className="primary"
+                onClick={() =>
+                  decide(
+                    "overridden",
+                    `Accepted jury outcome: ${scenario.judgeIssues.join("; ")}.`,
+                  )
+                }
+              >
+                ACCEPT JURY OUTCOME<span>OVERTURN AUTOMATED DECISION</span>
+              </button>
+              <button
+                onClick={() =>
+                  decide(
+                    "approved",
+                    "Original decision upheld after independent human review.",
+                  )
+                }
+              >
+                UPHOLD ORIGINAL
+              </button>
+              <button
+                onClick={() =>
+                  decide(
+                    "review_requested",
+                    "Further evidence requested before final disposition.",
+                  )
+                }
+              >
+                REQUEST FURTHER REVIEW
+              </button>
+            </div>
+          )}
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function ReviewMap({
+  scenario,
+  run,
+  answer,
+}: {
+  scenario: ScenarioDefinition;
+  run: DemoRunResult;
+  answer: ExplainabilityAnswer | null;
+}) {
+  const sources = answer?.sources ?? [];
+  return (
+    <aside className="review-map">
+      <div className="review-metrics">
+        <p>
+          <span>ORIGINAL AI</span>
+          <strong>
+            {scenario.initialDecisionLabel} · {scenario.confidence}%
+          </strong>
+        </p>
+        <Icon name="arrow" size={20} />
+        <p>
+          <span>JURY</span>
+          <strong>{run.review.court.juryVerdict.split}</strong>
+        </p>
+      </div>
+      <div className="evidence-path">
+        {scenario.caseData.evidence.map((item) => (
+          <b
+            key={item.id}
+            className={sources.includes(item.id) ? "highlight" : ""}
+          >
+            {item.id}
+            <small>{item.title}</small>
+          </b>
+        ))}
+      </div>
+      <ExplanationVisual answer={answer} />
+    </aside>
+  );
+}
+
+function ExplanationVisual({
+  answer,
+}: {
+  answer: ExplainabilityAnswer | null;
+}) {
+  const intent = answer?.intent ?? "unknown";
+  if (!answer)
+    return (
+      <div className="question-visual idle">
+        <Icon name="file" size={34} />
+        <strong>ASK THE RECORD</strong>
+        <span>Evidence · context · safeguards</span>
+      </div>
+    );
+  if (intent === "evidence_support")
+    return (
+      <div className="question-visual fact-flow" key={answer.heading}>
+        <div>
+          <b>PAYMENT HISTORY</b>
+          <span>2 delayed transfers</span>
+        </div>
+        <i />
+        <AgentNode active kind="fact" label="FACT CHECKER" />
+        <i />
+        <div>
+          <b>BANK MIGRATION</b>
+          <span>Context found</span>
+        </div>
+        <strong>NOT SUPPORTED</strong>
+      </div>
+    );
+  if (intent === "privacy")
+    return (
+      <div className="question-visual firewall-flow" key={answer.heading}>
+        {["Name", "Age", "Email", "Exact identity"].map((item) => (
+          <b key={item}>
+            {item}
+            <span>×</span>
+          </b>
+        ))}
+        <div>
+          <Icon name="lock" size={28} />
+          <strong>IDENTITY FIREWALL</strong>
+        </div>
+      </div>
+    );
+  if (intent === "counterfactual")
+    return (
+      <div className="question-visual counter-flow" key={answer.heading}>
+        <div>
+          <span>WITH GEOGRAPHY</span>
+          <b>DECLINE</b>
+        </div>
+        <Icon name="arrow" size={24} />
+        <div>
+          <span>WITHOUT GEOGRAPHY</span>
+          <b>APPROVE</b>
+        </div>
+        <strong>OUTCOME CHANGED</strong>
+      </div>
+    );
+  if (intent === "context_access")
+    return (
+      <div className="question-visual access-flow" key={answer.heading}>
+        <div>
+          <b>SCOPED PACKET</b>
+          {answer.sources.map((source) => (
+            <span key={source}>{source} ✓</span>
+          ))}
+        </div>
+        <Icon name="arrow" size={24} />
+        <AgentNode active kind="witness" label="AUTHORIZED CONTEXT" />
+        <strong>OTHER DATA BLOCKED</strong>
+      </div>
+    );
+  if (intent === "human_review")
+    return (
+      <div className="question-visual safeguard-flow" key={answer.heading}>
+        <b>FACTUAL RISK</b>
+        <b>OUTCOME SENSITIVITY</b>
+        <Icon name="arrow" size={24} />
+        <strong>HUMAN REVIEW</strong>
+      </div>
+    );
+  return (
+    <div className="question-visual record-flow" key={answer.heading}>
+      <Icon name="file" size={32} />
+      <strong>STRUCTURED CASE RECORD</strong>
+      <span>{answer.highlights.slice(0, 3).join(" · ")}</span>
+    </div>
+  );
+}
+
+function AskJuryAI({
+  question,
+  answer,
+  onAsk,
+}: {
+  question: string;
+  answer: ExplainabilityAnswer | null;
+  onAsk: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(question);
+  const suggestions = [
+    "Why was this decision challenged?",
+    "What evidence mattered most?",
+    "Why did the Fact Checker disagree?",
+    "What did the Decision Witness see?",
+    "What information was hidden?",
+    "Why did geography matter?",
+    "What would make JuryAI uphold the decline?",
+    "Why is human review required?",
+  ];
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    if (draft.trim()) onAsk(draft.trim());
+  };
+  const ask = (value: string) => {
+    setDraft(value);
+    onAsk(value);
+  };
+  return (
+    <section className="ask-panel">
+      <header>
+        <Icon name="scale" size={20} />
+        <strong>ASK JURYAI</strong>
+        <span>STRUCTURED RECORD ONLY</span>
+      </header>
+      <form onSubmit={submit}>
+        <input
+          aria-label="Ask JuryAI"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder="Ask why this decision was challenged…"
+        />
+        <button aria-label="Submit question">
+          <Icon name="arrow" size={20} />
+        </button>
+      </form>
+      <div className="suggestions">
+        {suggestions.map((item) => (
+          <button key={item} onClick={() => ask(item)}>
+            {item}
+          </button>
+        ))}
+      </div>
+      {answer ? (
+        <article className="record-answer" key={question}>
+          <span>{answer.heading}</span>
+          {answer.paragraphs.map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
+          ))}
+          <footer>
+            <strong>SOURCES</strong>
+            {answer.sources.length ? (
+              answer.sources.map((source) => <b key={source}>{source}</b>)
+            ) : (
+              <em>Structured case record</em>
+            )}
+          </footer>
+        </article>
+      ) : (
+        <article className="answer-empty">
+          <strong>Ask “why?”, “what evidence?”, or “what was hidden?”</strong>
+        </article>
+      )}
+    </section>
+  );
+}
+
+function DecisionRecord({
+  scenario,
+  zoneLabel,
+  events,
+  run,
+  decision,
+  restart,
+}: {
+  scenario: ScenarioDefinition;
+  zoneLabel: string;
+  events: TrialEvent[];
+  run: DemoRunResult;
+  decision: HumanDecision;
+  restart: () => void;
+}) {
+  const final =
+    decision.action === "overridden"
+      ? "OVERTURNED"
+      : decision.action === "approved"
+        ? "UPHELD"
+        : "FURTHER REVIEW";
+  const timeline = [
+    "AI decision",
+    "Identity firewall",
+    "3 specialists",
+    "Counterfactual",
+    "Clerk",
+    "Jury",
+    "Human",
+  ];
+  const controls = [
+    "Human oversight",
+    "Traceability",
+    "Data minimization",
+    "Least privilege",
+    "Fairness test",
+    "Stateless review",
+  ];
+  return (
+    <section className="record-view">
+      <PageTitle
+        eyebrow="DECISION RECORD"
+        title="Case review complete."
+        copy={`${scenario.caseData.id} · ${zoneLabel} · ${events.length} timestamped events`}
+      />
+      <div className="record-outcome">
+        <span>FINAL HUMAN DECISION</span>
+        <strong>{final}</strong>
+        <p>{decision.reason}</p>
+        <b>
+          <Icon name="check" size={18} /> RECORD SEALED
+        </b>
+      </div>
+      <div className="record-timeline">
+        {timeline.map((item, index) => (
+          <div key={item}>
+            <span>{String(index + 1).padStart(2, "0")}</span>
+            <i />
+            <strong>{item}</strong>
+          </div>
+        ))}
+      </div>
+      <div className="record-bottom">
+        <article>
+          <span>WHY IT CHANGED</span>
+          <h2>{run.review.court.juryVerdict.split}</h2>
+          {scenario.judgeIssues.map((issue) => (
+            <p key={issue}>
+              <Icon name="check" size={16} />
+              {issue}
+            </p>
+          ))}
+        </article>
+        <article>
+          <span>CONTROLS DEMONSTRATED</span>
+          <div>
+            {controls.map((control) => (
+              <p key={control}>
+                <Icon name="check" size={15} />
+                {control}
+              </p>
+            ))}
+          </div>
+        </article>
+        <aside>
+          <strong>
+            GOVERN THE DECISION,
+            <br />
+            NOT JUST THE MODEL.
+          </strong>
+          <p>JuryAI · Decision assurance for AI-assisted lending.</p>
+          <button onClick={restart}>
+            <Icon name="refresh" size={16} />
+            RESTART CASE
+          </button>
+        </aside>
+      </div>
+    </section>
+  );
 }

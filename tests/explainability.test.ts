@@ -21,6 +21,10 @@ describe("Interactive human-review explanations", () => {
     assert.equal(classifyExplanationQuestion("what happens if geography is removed"), "counterfactual");
     assert.equal(classifyExplanationQuestion("show me the evidence"), "evidence_support");
     assert.equal(classifyExplanationQuestion("why should I trust this"), "human_review");
+    assert.equal(classifyExplanationQuestion("show me why"), "decision_reason");
+    assert.equal(classifyExplanationQuestion("did age affect this"), "privacy");
+    assert.equal(classifyExplanationQuestion("was name visible"), "privacy");
+    assert.equal(classifyExplanationQuestion("what would change the result"), "missing_evidence");
   });
 
   it("answers only from the completed structured record with evidence references", async () => {
@@ -40,6 +44,6 @@ describe("Interactive human-review explanations", () => {
     const run = { scenarioId: scenario.id, zoneId: "eu_trusted" as const, review, compliance: generateComplianceSummary(scenario, "eu_trusted", review) };
     const answer = answerFromTrialRecord("What is the applicant's favorite color?", scenario, run, []);
     assert.equal(answer.intent, "unknown");
-    assert.equal(answer.paragraphs[0], "I don't have enough evidence in this case record to answer that.");
+    assert.equal(answer.paragraphs[0], "This case record does not contain enough evidence to answer that.");
   });
 });
