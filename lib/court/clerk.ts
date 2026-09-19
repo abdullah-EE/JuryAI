@@ -34,6 +34,15 @@ export function buildCasePacket(
     evidenceIds: [...risk.evidenceReferences],
     label: risk.title,
   }));
+  for (const entry of ledger.entries) {
+    if (!entry.riskType || entry.severity === "none") continue;
+    riskFlags.push({
+      type: entry.riskType,
+      severity: entry.severity,
+      evidenceIds: [entry.evidenceId],
+      label: entry.finding.slice(0, 160),
+    });
+  }
   if (counterfactual.changedOutcome) riskFlags.push({
     type: "bias",
     severity: counterfactual.severity,
@@ -63,9 +72,13 @@ export function buildCasePacket(
       counterfactualRecommendation: counterfactual.counterfactualRecommendation,
       severity: counterfactual.severity,
     },
-    riskFlags,
+    riskFlags: riskFlags.filter((risk, index, all) => index === all.findIndex((candidate) =>
+      candidate.type === risk.type
+      && candidate.severity === risk.severity
+      && candidate.label === risk.label
+      && candidate.evidenceIds.join("|") === risk.evidenceIds.join("|"),
+    )),
     contradictions,
     confidence,
   });
 }
-

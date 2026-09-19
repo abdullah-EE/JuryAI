@@ -122,15 +122,18 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
   const useMocks = options.useMocks ?? process.env.USE_MOCK_AGENTS === "true";
   const demoMode = options.demoMode ?? process.env.DEMO_MODE === "true";
   const counterfactual = runDemoPostalCounterfactual(demoCase);
+  const requestedTimeout = options.timeoutMs ?? Number(process.env.AGENT_TIMEOUT_MS ?? (demoMode ? 5000 : 15000));
+  const safeTimeout = Number.isFinite(requestedTimeout) && requestedTimeout > 0 ? requestedTimeout : (demoMode ? 5000 : 15000);
+  const requestedTokens = options.maxOutputTokens ?? (demoMode ? 350 : 500);
   const provider: ProviderConfig = {
     provider: "openai",
     model: options.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-    timeoutMs: options.timeoutMs ?? Number(process.env.AGENT_TIMEOUT_MS ?? (demoMode ? 5000 : 15000)),
-    maxOutputTokens: options.maxOutputTokens ?? (demoMode ? 350 : 500),
+    timeoutMs: demoMode ? Math.min(safeTimeout, 5000) : safeTimeout,
+    maxOutputTokens: demoMode ? Math.min(requestedTokens, 350) : requestedTokens,
   };
   if (useMocks || !apiKey) {
     const findings = agentRoles.map(mockFor);
-    const court = await runCourtProcess(demoCase, findings, counterfactual, { useMocks: true, model: provider.model, timeoutMs: provider.timeoutMs });
+    const court = await runCourtProcess(demoCase, findings, counterfactual, { useMocks: true, demoMode, model: provider.model, timeoutMs: provider.timeoutMs });
     return AgentReviewResultSchema.parse({ findings, mode: "fallback", counterfactual, court });
   }
 
@@ -156,6 +159,7 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
     apiKey,
     model: provider.model,
     timeoutMs: provider.timeoutMs,
+    demoMode,
   });
   const reviewMode = options.runner && !options.courtRunner
     ? mode

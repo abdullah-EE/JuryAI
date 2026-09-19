@@ -291,7 +291,7 @@ function JuryDeliberation({ next, findings, court }: { next: () => void; finding
         <div className="verdict-confidence"><span>Jury confidence</span><strong>{Math.round(result.confidence * 100)}%</strong><div className="meter"><i style={{ width: `${result.confidence * 100}%` }} /></div></div>
       </div>
 
-      {court && <div className="juror-grid">{court.jurorVotes.map((vote) => <article className="panel juror-card" key={vote.jurorId}><span><Icon name="lock" size={13} /> SEALED {vote.jurorId}</span><h3>{vote.vote.replace("_", " ")}</h3><p>{vote.reason}</p><small>{vote.keyEvidenceIds.join(" · ")} · {Math.round(vote.confidence * 100)}%</small></article>)}</div>}
+      {court && <div className="juror-grid">{court.jurorVotes.map((vote) => <article className="panel juror-card" key={vote.jurorId}><span><Icon name="lock" size={13} /> SEALED {vote.jurorId} · {vote.view.replaceAll("_", " ")}</span><h3>{vote.vote.replace("_", " ")}</h3><p>{vote.reason}</p><small>{vote.keyEvidenceIds.join(" · ")} · {Math.round(vote.confidence * 100)}%</small></article>)}</div>}
 
       <div className="deliberation-grid">
         <section className="panel compare-panel">

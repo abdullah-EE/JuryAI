@@ -75,7 +75,8 @@ describe("Phase 4 sequential court procedure", () => {
   it("serious risk requires review despite an unanimous majority", () => {
     const micro = EvidenceMicroFindingSchema.parse({ evidenceId: "EV-05", sourceRole: "evidence_examiner", finding: "Proxy concern", supportStatus: "verified", confidence: 0.9, riskType: "privacy", severity: "high" });
     const packet = buildCasePacket(createEvidenceLedger([micro]), mockFindings, runDemoPostalCounterfactual(demoCase));
-    const votes = ["J1", "J2", "J3"].map((jurorId) => JurorVoteSchema.parse({ jurorId, vote: "uphold", confidence: 0.9, keyEvidenceIds: ["EV-05"], reason: "Vote" })) as JurorVote[];
+    const views = ["evidence_first", "claim_evidence", "contradiction_first"] as const;
+    const votes = ["J1", "J2", "J3"].map((jurorId, index) => JurorVoteSchema.parse({ jurorId, view: views[index], vote: "uphold", confidence: 0.9, keyEvidenceIds: ["EV-05"], reason: "Vote" })) as JurorVote[];
     assert.equal(calculateJuryVerdict(votes, packet).judicialReviewRequired, true);
   });
 
@@ -95,4 +96,3 @@ describe("Phase 4 sequential court procedure", () => {
     assert.equal(result.jurorVotes.length, 3);
   });
 });
-

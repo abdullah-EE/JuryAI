@@ -3,11 +3,12 @@ import type { Case, AgentFinding, CounterfactualResult, EvidenceMicroFinding, Ju
 import { CourtProcessResultSchema, EvidenceMicroFindingSchema, JudgeIssueAssessmentSchema, JurorVoteSchema } from "../schemas";
 import { buildCasePacket, createEvidenceLedger } from "./clerk";
 import { calculateJuryVerdict } from "./jury";
+import { buildAllJurorViews, type JurorViewId } from "./juror-views";
 import { OpenAICourtSessionRunner } from "./openai-session-runner";
 import type { CourtSessionRunner } from "./session-runner";
 
 const EvidenceOutputSchema = EvidenceMicroFindingSchema.omit({ evidenceId: true, sourceRole: true }).strict();
-const JurorOutputSchema = JurorVoteSchema.omit({ jurorId: true }).strict();
+const JurorOutputSchema = JurorVoteSchema.omit({ jurorId: true, view: true }).strict();
 const JudgeOutputSchema = JudgeIssueAssessmentSchema.omit({ issueId: true, issueType: true }).strict();
 
 export type CourtProcessOptions = {
@@ -17,6 +18,7 @@ export type CourtProcessOptions = {
   model?: string;
   timeoutMs?: number;
   maxOutputTokens?: number;
+  demoMode?: boolean;
 };
 
 function fallbackEvidence(caseData: Case, evidenceId: string): EvidenceMicroFinding {
@@ -102,16 +104,18 @@ async function assessJudgeIssues(packet: ReturnType<typeof buildCasePacket>, run
 }
 
 const fallbackVotes: JurorVote[] = [
-  { jurorId: "J1", vote: "overturn", confidence: 0.88, keyEvidenceIds: ["EV-02", "EV-04"], reason: "Verified context undermines the stated payment-risk basis." },
-  { jurorId: "J2", vote: "overturn", confidence: 0.84, keyEvidenceIds: ["EV-01", "EV-05"], reason: "Affordability is supported and location sensitivity is material." },
-  { jurorId: "J3", vote: "human_review", confidence: 0.8, keyEvidenceIds: ["EV-03", "EV-05"], reason: "The factual and proxy risks require a human disposition." },
+  { jurorId: "J1", view: "evidence_first", vote: "overturn", confidence: 0.88, keyEvidenceIds: ["EV-02", "EV-04"], reason: "Verified context undermines the stated payment-risk basis." },
+  { jurorId: "J2", view: "claim_evidence", vote: "overturn", confidence: 0.84, keyEvidenceIds: ["EV-01", "EV-05"], reason: "Affordability is supported and location sensitivity is material." },
+  { jurorId: "J3", view: "contradiction_first", vote: "human_review", confidence: 0.8, keyEvidenceIds: ["EV-03", "EV-05"], reason: "The factual and proxy risks require a human disposition." },
 ].map((vote) => JurorVoteSchema.parse(vote));
 
 async function collectJurorVotes(packet: ReturnType<typeof buildCasePacket>, runner: CourtSessionRunner | null, provider: ProviderConfig) {
   const jurorIds = ["J1", "J2", "J3"] as const;
+  const views = buildAllJurorViews(packet);
   return Promise.all(jurorIds.map(async (jurorId, index) => {
     if (!runner) return { vote: structuredClone(fallbackVotes[index]), fallback: true };
-    const input = structuredClone({ casePacket: packet });
+    const jurorView = views[jurorId];
+    const input = structuredClone({ admissibleCaseView: jurorView });
     try {
       const output = await runner.run({
         sessionId: `juror-${jurorId}`,
@@ -119,9 +123,10 @@ async function collectJurorVotes(packet: ReturnType<typeof buildCasePacket>, run
         input,
         outputSchema: JurorOutputSchema,
         provider,
-        systemPrompt: "Vote independently from this neutral packet. You cannot see other jurors. Give a very short reason and cited evidence IDs. Return JSON only.",
+        systemPrompt: "Vote independently from this neutral view of the complete admissible facts. You cannot see other jurors. Do not infer omitted facts. Give a very short reason and cited evidence IDs. Return JSON only.",
       });
-      return { vote: JurorVoteSchema.parse({ jurorId, ...output }), fallback: false };
+      if (!output.keyEvidenceIds.every((evidenceId) => packet.evidenceReferences.includes(evidenceId))) throw new Error("Juror cited inadmissible evidence");
+      return { vote: JurorVoteSchema.parse({ jurorId, view: jurorView.view satisfies JurorViewId, ...output }), fallback: false };
     } catch { return { vote: structuredClone(fallbackVotes[index]), fallback: true }; }
   }));
 }
@@ -134,10 +139,13 @@ export async function runCourtProcess(
 ) {
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
   const useMocks = options.useMocks ?? process.env.USE_MOCK_AGENTS === "true";
+  const demoMode = options.demoMode ?? process.env.DEMO_MODE === "true";
+  const requestedTimeout = options.timeoutMs ?? Number(process.env.AGENT_TIMEOUT_MS ?? (demoMode ? 5000 : 15000));
+  const safeTimeout = Number.isFinite(requestedTimeout) && requestedTimeout > 0 ? requestedTimeout : (demoMode ? 5000 : 15000);
   const provider: ProviderConfig = {
     provider: "openai",
     model: options.model ?? process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-    timeoutMs: options.timeoutMs ?? Number(process.env.AGENT_TIMEOUT_MS ?? 5000),
+    timeoutMs: demoMode ? Math.min(safeTimeout, 5000) : safeTimeout,
     maxOutputTokens: options.maxOutputTokens ?? 180,
   };
   const runner = !useMocks && apiKey ? (options.runner ?? new OpenAICourtSessionRunner(apiKey)) : null;

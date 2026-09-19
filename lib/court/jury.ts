@@ -13,16 +13,19 @@ export function safeguardTriggers(packet: CasePacket): string[] {
 export function calculateJuryVerdict(votes: JurorVote[], packet: CasePacket) {
   const counts = { uphold: 0, overturn: 0, human_review: 0 };
   for (const vote of votes) counts[vote.vote] += 1;
-  const majority = (Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "human_review") as JurorVote["vote"];
+  const majorityEntry = Object.entries(counts).find(([, count]) => count >= 2);
+  const majority = (majorityEntry?.[0] ?? "human_review") as JurorVote["vote"];
   const winning = counts[majority];
   const triggers = safeguardTriggers(packet);
+  const split = majorityEntry
+    ? `${winning}–${votes.length - winning} ${majority}`
+    : `${counts.uphold}–${counts.overturn}–${counts.human_review} human_review`;
   return JuryVerdictSchema.parse({
     majority,
-    split: `${winning}–${votes.length - winning} ${majority}`,
+    split,
     votes,
     disagreement: new Set(votes.map((vote) => vote.vote)).size > 1,
     judicialReviewRequired: triggers.length > 0,
     safeguardTriggers: triggers,
   });
 }
-

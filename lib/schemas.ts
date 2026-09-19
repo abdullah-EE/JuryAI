@@ -185,6 +185,7 @@ export const CasePacketSchema = z.object({
 
 export const JurorVoteSchema = z.object({
   jurorId: z.enum(["J1", "J2", "J3"]),
+  view: z.enum(["evidence_first", "claim_evidence", "contradiction_first"]),
   vote: z.enum(["uphold", "overturn", "human_review"]),
   confidence: z.number().min(0).max(1),
   keyEvidenceIds: z.array(z.string()).max(5),
