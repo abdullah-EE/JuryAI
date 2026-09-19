@@ -17,16 +17,22 @@ function unique(values: Array<string | undefined>) {
 }
 
 export function classifyExplanationQuestion(question: string): ExplanationIntent {
-  const value = question.toLowerCase();
-  if (/identif|identity|firewall|removed|redact|personal information/.test(value)) return "privacy";
-  if (/what .*see|information .*see|hidden|context contract|allowed|blocked/.test(value)) return "context_access";
-  if (/counterfactual|geograph|postal|without.*chang|had not changed/.test(value)) return "counterfactual";
-  if (/juror|vote|disagree|split/.test(value)) return "jury_disagreement";
-  if (/human review|escalat|safeguard/.test(value)) return "human_review";
-  if (/what evidence would|change this conclusion|missing evidence|more evidence/.test(value)) return "missing_evidence";
-  if (/payment|unsupported|evidence mattered|which evidence|support/.test(value)) return "evidence_support";
-  if (/why.*overturn|recommend.*overturn|original decision|why.*challeng/.test(value)) return "decision_reason";
-  return "unknown";
+  const value = question.toLowerCase().normalize("NFKD").replace(/[’']/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  if (!value) return "unknown";
+  const rules:Array<[RegExp,ExplanationIntent]> = [
+    [/(what|which).*(did|does|can).*(witness|checker|challenger|agent).*(see|receive|get)|what information.*(hidden|blocked)|context contract/,"context_access"],
+    [/(geograph|postal|location|counterfactual).*(matter|remove|without|change)|what happens.*(geograph|postal|location)/,"counterfactual"],
+    [/(fact checker|payment).*(find|disagree|unsupported|wrong|claim)|evidence mattered|show me.*evidence/,"evidence_support"],
+    [/(identif|identity|firewall|redact|personal|persons age|use age|data removed)/,"privacy"],
+    [/(juror|jury).*(disagree|dissent|vote|split)|which juror/,"jury_disagreement"],
+    [/(human review|required|escalat|safeguard)|why should i trust/,"human_review"],
+    [/(what evidence would|change.*conclusion|make.*uphold|missing evidence|more evidence)/,"missing_evidence"],
+    [/(why.*overturn|why.*challeng|bank ai wrong|why.*declin|original decision|recommend.*overturn)/,"decision_reason"],
+  ];
+  for (const [pattern,intent] of rules) if (pattern.test(value)) return intent;
+  const terms:Record<Exclude<ExplanationIntent,"unknown">,string[]>={decision_reason:["overturn","challenged","declined","wrong","decision"],evidence_support:["evidence","payment","unsupported","fact checker","transfers"],counterfactual:["counterfactual","geography","postal","location","sensitivity"],privacy:["identity","identifying","age","name","email","firewall"],context_access:["context","access","received","hidden","allowed","blocked","agents"],jury_disagreement:["juror","jury","vote","split","dissent"],human_review:["human","review","safeguard","trust","escalation"],missing_evidence:["missing","additional","further","change conclusion","uphold"]};
+  const ranked=(Object.entries(terms) as Array<[Exclude<ExplanationIntent,"unknown">,string[]]>).map(([intent,words])=>({intent,score:words.reduce((score,word)=>score+(value.includes(word)?(word.includes(" ")?3:2):0),0)})).sort((a,b)=>b.score-a.score);
+  return ranked[0].score>=2?ranked[0].intent:"unknown";
 }
 
 export function answerFromTrialRecord(question: string, scenario: ScenarioDefinition, run: DemoRunResult, events: TrialEvent[]): ExplainabilityAnswer {
@@ -71,5 +77,5 @@ export function answerFromTrialRecord(question: string, scenario: ScenarioDefini
     const disputed=run.review.court.casePacket.disputedFindings.map((item)=>item.evidenceId);
     return { intent, heading:"What could change the conclusion", paragraphs:[`New verified evidence would need to resolve the disputed findings (${disputed.join(", ")||"none identified"}) or show that the detected sensitivity does not affect the decision.`,"The current record does not contain that evidence, so JuryAI cannot predict a different outcome."],sources:unique(disputed),highlights:["Disputed findings","Additional verified evidence required"] };
   }
-  return { intent, heading:"Not enough evidence in this record", paragraphs:["The current case record does not contain enough evidence to answer that."],sources:[],highlights:["No unsupported inference"] };
+  return { intent, heading:"Not enough evidence in this record", paragraphs:["I don't have enough evidence in this case record to answer that."],sources:[],highlights:["No unsupported inference"] };
 }
