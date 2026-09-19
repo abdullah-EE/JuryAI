@@ -15,7 +15,7 @@ const courtStages: Array<{ label: string; role: string; summary: string }> = [
   { label: "Bank AI", role: "Accused decision", summary: "Made the original decline at 86% confidence." },
   { label: "Firewall", role: "Court security", summary: "Removes identity before specialist review." },
   { label: "Sufficiency Gate", role: "Admissibility", summary: "Checks that every agent has enough evidence—and nothing extra." },
-  { label: "Decision Witness", role: "Expert witness", summary: "Tests affordability using financial evidence only." },
+  { label: "Expert Witnesses", role: "Financial witnesses", summary: "Three scoped examiners test income, credit, and cash flow independently." },
   { label: "Fact Checker", role: "Cross-examiner", summary: "Challenges whether the stated reason is supported." },
   { label: "Bias + Privacy", role: "Defense watchdog", summary: "Tests proxy sensitivity without seeing financial records." },
   { label: "Court Clerk", role: "Case assembly", summary: "Organizes sealed findings without giving an opinion." },
@@ -148,20 +148,38 @@ function StageEvidence({ ids, selected }: { ids: string[]; selected?: string }) 
   return <div className="stage-evidence">{scenario.caseData.evidence.map((item) => <div key={item.id} className={`${ids.includes(item.id) ? "included" : "excluded"} ${selected === item.id ? "selected" : ""}`}><b>{item.id}</b><span>{item.title}</span><small>{ids.includes(item.id) ? "ADMITTED" : "SEALED"}</small></div>)}</div>;
 }
 
+function ExpertWitnesses() {
+  const witnesses = [
+    { evidence: "EV-01", name: "Income examiner", focus: "Income + employment", result: "VERIFIED" },
+    { evidence: "EV-02", name: "Credit examiner", focus: "Credit history", result: "STABLE" },
+    { evidence: "EV-03", name: "Cash-flow examiner", focus: "Payment history", result: "AFFORDABLE" },
+  ];
+  return <div className="expert-witnesses" aria-label="Three financial expert witnesses">
+    {witnesses.map((witness) => <article key={witness.evidence} tabIndex={0} aria-label={`${witness.name}: ${witness.focus}, ${witness.result}`}>
+      <span>{witness.evidence}</span>
+      <svg viewBox="0 0 90 100" aria-hidden><circle cx="45" cy="25" r="13" /><path d="M22 78V58c0-15 9-23 23-23s23 8 23 23v20M13 84h64M29 96V78M61 96V78" /><path className="witness-signal" d="M8 40h13M69 40h13" /></svg>
+      <b>{witness.name}</b>
+      <small>{witness.focus}</small>
+      <strong>{witness.result}</strong>
+    </article>)}
+    <div className="witness-seal"><span>3 ISOLATED EXAMINATIONS</span><b>DECISION WITNESS FINDING SEALED</b></div>
+  </div>;
+}
+
 function CourtroomStage({ step, run, selectedEvidence }: { step: CourtStep; run: DemoRunResult | null; selectedEvidence?: string }) {
   const finding = (role: Role) => run?.review.findings.find((item) => item.role === role);
   const stages: Record<CourtStep, ReactNode> = {
     0: <><div className="stage-side"><span>ORIGINAL CALL</span><strong className="danger">DECLINE</strong><p>“Payment instability + location risk”</p></div><AgentFigure kind="ai"><div className="figure-label"><b>BANK AI</b><span>THE ACCUSED DECISION</span></div></AgentFigure><div className="stage-side outcome"><span>WHAT IS ON TRIAL?</span><strong>86%</strong><p>One model made the call and explained its own call.</p></div></>,
     1: <><div className="identity-stream"><span className="blocked">NAME</span><span className="blocked">AGE</span><span className="blocked">IDENTITY</span></div><AgentFigure kind="guard"><div className="figure-label"><b>IDENTITY FIREWALL</b><span>COURT SECURITY</span></div></AgentFigure><div className="stage-side safe"><span>REVIEW IDENTITY</span><strong>SUB-0417</strong><p>Only purpose-limited fields pass.</p></div></>,
     2: <><StageEvidence ids={["EV-01", "EV-02", "EV-03"]} selected={selectedEvidence}/><AgentFigure kind="gate"><div className="figure-label"><b>SUFFICIENCY GATE</b><span>EVIDENCE ADMISSIBILITY</span></div></AgentFigure><div className="stage-side safe"><span>DECISION</span><strong>PASS</strong><p>Enough evidence to answer. Extra evidence remains sealed.</p></div></>,
-    3: <><StageEvidence ids={["EV-01", "EV-02", "EV-03"]} selected={selectedEvidence}/><AgentFigure kind="witness"><div className="figure-label"><b>DECISION WITNESS</b><span>EXPERT WITNESS</span></div></AgentFigure><div className="stage-side finding"><span>SEALED FINDING</span><strong>SUPPORTS AFFORDABILITY</strong><p>{finding("decision_witness")?.claims[0]?.statement ?? "Financial evidence supports affordability."}</p></div></>,
+    3: <><StageEvidence ids={["EV-01", "EV-02", "EV-03"]} selected={selectedEvidence}/><ExpertWitnesses /><div className="stage-side finding"><span>COMBINED SEALED FINDING</span><strong>SUPPORTS AFFORDABILITY</strong><p>{finding("decision_witness")?.claims[0]?.statement ?? "Financial evidence supports affordability."}</p></div></>,
     4: <><StageEvidence ids={["EV-02", "EV-03", "EV-04"]} selected={selectedEvidence}/><AgentFigure kind="lawyer"><div className="figure-label"><b>FACT CHECKER</b><span>CROSS-EXAMINER</span></div></AgentFigure><div className="stage-side warning"><span>CHALLENGE RESULT</span><strong>CLAIM UNSUPPORTED</strong><p>EV-04 explains the late transfers as a bank migration.</p></div></>,
     5: <><StageEvidence ids={["EV-05"]} selected={selectedEvidence}/><AgentFigure kind="watchdog"><div className="figure-label"><b>BIAS + PRIVACY</b><span>DEFENSE WATCHDOG</span></div></AgentFigure><div className="stage-side counter"><span>COUNTERFACTUAL</span><div><b>WITH GEO</b><strong>DECLINE</strong></div><i>→</i><div><b>WITHOUT</b><strong>APPROVE</strong></div><p>Sensitivity detected—not proof of discrimination.</p></div></>,
     6: <><div className="sealed-stack"><span>WITNESS</span><span>FACT CHECK</span><span>PRIVACY</span></div><AgentFigure kind="clerk"><div className="figure-label"><b>COURT CLERK</b><span>NEUTRAL CASE ASSEMBLY</span></div></AgentFigure><div className="stage-side safe"><span>CASE PACKET</span><strong>SEALED</strong><p>References checked. No opinion added. Raw reasoning excluded.</p></div></>,
     7: <><div className="jury-views"><span>EVIDENCE-FIRST</span><span>CLAIM / EVIDENCE</span><span>CONTRADICTION-FIRST</span></div><AgentFigure kind="jury"><div className="figure-label"><b>AI JURY</b><span>INDEPENDENT · SEALED VOTES</span></div></AgentFigure><div className="stage-side verdict"><span>REVEALED TOGETHER</span><strong>{run?.review.court.juryVerdict.split ?? "2–1 OVERTURN"}</strong><p>Same material facts. Different neutral views. No debate.</p></div></>,
     8: <><div className="judge-brief"><span>JURY</span><strong>2–1 OVERTURN</strong><span>SAFEGUARD</span><strong>REVIEW REQUIRED</strong></div><AgentFigure kind="judge"><div className="figure-label"><b>HUMAN JUDGE</b><span>FINAL AUTHORITY</span></div></AgentFigure><div className="stage-side safe"><span>ACCOUNTABILITY</span><strong>HUMAN</strong><p>Question the record. Accept, override, or request more evidence.</p></div></>,
   };
-  return <div className="court-stage"><div className="stage-question"><span>{String(step + 1).padStart(2, "0")} · {courtStages[step].role}</span><h1>{step === 0 ? "The decision enters the courtroom." : step === 1 ? "Identity stops at the door." : step === 2 ? "Is the evidence admissible?" : step === 3 ? "Do the finances support the decision?" : step === 4 ? "Is the stated reason actually true?" : step === 5 ? "Did a sensitive proxy change the outcome?" : step === 6 ? "Can sealed findings become a neutral case?" : step === 7 ? "What do independent jurors conclude?" : "A human makes the final call."}</h1></div><div className="stage-scene">{stages[step]}</div><div className="stage-principle"><span>THE RULE</span><strong>{step < 3 ? "Minimum necessary evidence." : step < 6 ? "Independent first. Synthesis second." : step < 8 ? "Findings are sealed before judgment." : "AI recommends. A human decides."}</strong></div></div>;
+  return <div className="court-stage"><div className="stage-question"><span>{String(step + 1).padStart(2, "0")} · {courtStages[step].role}</span><h1>{step === 0 ? "The decision enters the courtroom." : step === 1 ? "Identity stops at the door." : step === 2 ? "Is the evidence admissible?" : step === 3 ? "What does each financial record establish?" : step === 4 ? "Is the stated reason actually true?" : step === 5 ? "Did a sensitive proxy change the outcome?" : step === 6 ? "Can sealed findings become a neutral case?" : step === 7 ? "What do independent jurors conclude?" : "A human makes the final call."}</h1></div><div className="stage-scene">{stages[step]}</div><div className="stage-principle"><span>THE RULE</span><strong>{step < 3 ? "Minimum necessary evidence." : step < 6 ? "Independent first. Synthesis second." : step < 8 ? "Findings are sealed before judgment." : "AI recommends. A human decides."}</strong></div></div>;
 }
 
 function TourControls({ step, setStep, onReview, ready }: { step: CourtStep; setStep: (step: CourtStep) => void; onReview: () => void; ready: boolean }) {
