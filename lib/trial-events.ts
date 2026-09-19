@@ -31,7 +31,6 @@ export async function executeTrialStream(
     details: { decision_witness: ["EV-01", "EV-02", "EV-03"], fact_checker: ["EV-02", "EV-03", "EV-04"], bias_privacy_challenger: ["EV-05"] },
   });
   const review = await runAgentReview({ caseData: scenario.caseData, observer: emit });
-  await emit({ type: "counterfactual_completed", evidenceIds: ["EV-05"], status: review.counterfactual.changedOutcome ? "outcome_changed" : "stable", summary: review.counterfactual.summary, risk: review.counterfactual.severity, details: { testedField: review.counterfactual.testedField, baseline: review.counterfactual.baselineRecommendation, counterfactual: review.counterfactual.counterfactualRecommendation } });
   await emit({ type: "jury_complete", status: "all_votes_sealed", evidenceIds: review.court.casePacket.evidenceReferences });
   await emit({ type: "jury_revealed", status: review.court.juryVerdict.majority, details: { split: review.court.juryVerdict.split, votes: review.court.jurorVotes.map((vote) => `${vote.jurorId}:${vote.vote}`) } });
   for (const trigger of review.court.juryVerdict.safeguardTriggers) await emit({ type: "safeguard_triggered", status: "human_review", risk: trigger });

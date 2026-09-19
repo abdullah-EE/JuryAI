@@ -153,6 +153,7 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
       await options.observer?.({ type: "finding_sealed", role, evidenceIds, status: "sealed", summary: finding.recommendation });
       return finding;
     }));
+    await options.observer?.({ type: "counterfactual_completed", evidenceIds: ["EV-05"], status: counterfactual.changedOutcome ? "outcome_changed" : "stable", summary: counterfactual.summary, risk: counterfactual.severity, details: { testedField: counterfactual.testedField, baseline: counterfactual.baselineRecommendation, counterfactual: counterfactual.counterfactualRecommendation } });
     const court = await runCourtProcess(caseData, findings, counterfactual, { useMocks: true, demoMode, model: provider.model, timeoutMs: provider.timeoutMs, observer: options.observer });
     return AgentReviewResultSchema.parse({ findings, mode: "fallback", counterfactual, court });
   }
@@ -180,6 +181,7 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
   const mode = results.some((result) => result.fallback) ? "fallback" : "live";
   console.info("[agent-batch]", { status: mode, latencyMs: Date.now() - startedAt, model: provider.model });
   const findings = results.map((result) => result.finding);
+  await options.observer?.({ type: "counterfactual_completed", evidenceIds: ["EV-05"], status: counterfactual.changedOutcome ? "outcome_changed" : "stable", summary: counterfactual.summary, risk: counterfactual.severity, details: { testedField: counterfactual.testedField, baseline: counterfactual.baselineRecommendation, counterfactual: counterfactual.counterfactualRecommendation } });
   const court = await runCourtProcess(caseData, findings, counterfactual, {
     runner: options.courtRunner,
     useMocks: Boolean(options.runner && !options.courtRunner),
