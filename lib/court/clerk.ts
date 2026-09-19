@@ -48,7 +48,7 @@ export function buildCasePacket(
     type: "bias",
     severity: counterfactual.severity,
     evidenceIds: ["EV-05"],
-    label: "Postal-code counterfactual changed the recommendation",
+    label: `${counterfactual.testedField} counterfactual changed the recommendation`,
   });
   const unsupported = witnesses.flatMap((finding) => finding.claims.filter((claim) => claim.status === "unsupported"));
   for (const claim of unsupported) riskFlags.push({

@@ -18,6 +18,7 @@ export type ScenarioDefinition = {
   witnessFindings: [string, string, string];
   judgeIssues: [string, string];
   dataNotUsed: string[];
+  sensitivity: { field: "postalCode" | "careerBreak" | "districtCode"; label: string; originalValue: string; removedValue: string };
   caseData: Case;
 };
 
@@ -86,6 +87,7 @@ export const scenarios: ScenarioDefinition[] = [
     witnessFindings: ["Financial evidence supports affordability.", "Payment-instability claim is unsupported.", "Postal-code sensitivity was detected."],
     judgeIssues: ["Unsupported payment-risk claim", "Postal-code sensitivity"],
     dataNotUsed: ["Name", "Age", "Full address"],
+    sensitivity: { field: "postalCode", label: "Postal geography", originalValue: "02150", removedValue: "Removed" },
     caseData: makeCase({
       id: "JAI-LEND-0417", title: "Consumer loan eligibility review", name: "Emma Lindholm", occupation: "Operations Manager", purpose: "Home energy renovation", confidence: 86,
       reason: "Recent payment instability and location risk indicate elevated repayment risk.", dataUsed: ["Income", "Credit score", "Payment history", "Postal code"],
@@ -112,15 +114,16 @@ export const scenarios: ScenarioDefinition[] = [
     witnessFindings: ["Role evidence supports progression.", "Employment-gap risk is contradicted by context.", "Location-proxy sensitivity was detected."],
     judgeIssues: ["Unsupported employment-gap inference", "Location-proxy sensitivity"],
     dataNotUsed: ["Name", "Age", "Profile photo"],
+    sensitivity: { field: "careerBreak", label: "Career-break indicator", originalValue: "Included", removedValue: "Neutralized" },
     caseData: makeCase({
       id: "JAI-HR-0284", title: "Candidate ranking review", name: "Alex Morgan", occupation: "Operations Lead candidate", purpose: "Operations Lead role", confidence: 82,
-      reason: "An employment gap and location proxy reduced the candidate ranking.", dataUsed: ["Employment history", "Skills score", "Interview score", "Postal code"],
+      reason: "A career-break indicator reduced the candidate ranking.", dataUsed: ["Employment history", "Skills score", "Interview score", "Career-break indicator"],
       evidence: [
         ["EV-01", "Verified employment history", "income", "Seven years of relevant operations experience with consistent progression.", ["Experience length", "Role progression"]],
         ["EV-02", "Skills assessment", "credit", "The candidate achieved a 91% match on role-critical skills.", ["Skills match", "Assessment score"]],
         ["EV-03", "Interview scorecard", "banking", "Structured interview ratings were strong across all required competencies.", ["Competency ratings", "Panel score"]],
         ["EV-04", "Career-break context", "context", "The employment gap was a documented caregiving leave, not performance-related.", ["Leave chronology", "Return-to-work date"]],
-        ["EV-05", "Candidate profile", "applicant", "The ranking model received a postal-geography field.", ["Postal code", "Role applied for"]],
+        ["EV-05", "Candidate profile", "applicant", "The ranking model received a career-break indicator.", ["Career-break indicator", "Role applied for"]],
       ],
     }),
   },
@@ -138,6 +141,7 @@ export const scenarios: ScenarioDefinition[] = [
     witnessFindings: ["Verified records support eligibility.", "Income-mismatch claim is explained by timing.", "District sensitivity was detected."],
     judgeIssues: ["Unsupported income-mismatch claim", "District proxy sensitivity"],
     dataNotUsed: ["Name", "Age", "Ethnicity"],
+    sensitivity: { field: "districtCode", label: "District risk score", originalValue: "Included", removedValue: "Neutralized" },
     caseData: makeCase({
       id: "JAI-GOV-1092", title: "Housing benefit eligibility review", name: "Case B-1092", occupation: "Benefits applicant", purpose: "Housing benefit", confidence: 84,
       reason: "A reported income mismatch and district risk exceeded the eligibility threshold.", dataUsed: ["Verified income", "Eligibility record", "Payment timing", "Postal code"],
@@ -160,4 +164,3 @@ export function getScenario(id: unknown): ScenarioDefinition {
 export function getScenarioForCase(caseData: Case): ScenarioDefinition {
   return scenarios.find((scenario) => scenario.caseData.id === caseData.id) ?? scenarios[0];
 }
-

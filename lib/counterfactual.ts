@@ -57,6 +57,23 @@ export function runDemoPostalCounterfactual(caseData: Case): CounterfactualResul
   return comparePostalCounterfactual(baselineInput);
 }
 
+export function runScenarioCounterfactual(caseData: Case): CounterfactualResult {
+  if (!caseData.id.includes("HR-") && !caseData.id.includes("GOV-")) return runDemoPostalCounterfactual(caseData);
+  const testedField = caseData.id.includes("HR-") ? "careerBreak" as const : "districtCode" as const;
+  const label = testedField === "careerBreak" ? "career-break indicator" : "district risk score";
+  const contextualEvidenceVerified = caseData.evidence.filter((evidence) => ["EV-01", "EV-02", "EV-03", "EV-04"].includes(evidence.id)).every((evidence) => evidence.verified);
+  const baselineRecommendation = caseData.initialDecision.recommendation;
+  const counterfactualRecommendation = contextualEvidenceVerified ? "approve" as const : "manual_review" as const;
+  const changedOutcome = baselineRecommendation !== counterfactualRecommendation;
+  return {
+    testedField, baselineRecommendation, counterfactualRecommendation, changedOutcome,
+    severity: changedOutcome ? "high" : "low",
+    summary: changedOutcome
+      ? `Counterfactual sensitivity detected: neutralizing the ${label} changed the recommendation from ${baselineRecommendation} to ${counterfactualRecommendation}. This requires human review; it does not prove discrimination.`
+      : `No outcome change was observed when the ${label} was neutralized. This test alone does not establish that the decision is unbiased.`,
+  };
+}
+
 export function counterfactualRiskFlag(result: CounterfactualResult): RiskFlag | null {
   if (!result.changedOutcome) return null;
   return {

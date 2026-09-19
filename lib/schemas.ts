@@ -133,7 +133,7 @@ export const AgentReviewResultSchema = z.object({
   findings: z.array(AgentFindingSchema).length(3),
   mode: z.enum(["live", "fallback"]),
   counterfactual: z.object({
-    testedField: z.literal("postalCode"),
+    testedField: z.enum(["postalCode", "careerBreak", "districtCode"]),
     baselineRecommendation: z.enum(["approve", "decline", "manual_review"]),
     counterfactualRecommendation: z.enum(["approve", "decline", "manual_review"]),
     changedOutcome: z.boolean(),
@@ -172,7 +172,7 @@ export const CasePacketSchema = z.object({
   disputedFindings: z.array(EvidenceMicroFindingSchema),
   evidenceReferences: z.array(z.string()),
   counterfactual: z.object({
-    testedField: z.literal("postalCode"),
+    testedField: z.enum(["postalCode", "careerBreak", "districtCode"]),
     changedOutcome: z.boolean(),
     baselineRecommendation: z.enum(["approve", "decline", "manual_review"]),
     counterfactualRecommendation: z.enum(["approve", "decline", "manual_review"]),

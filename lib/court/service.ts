@@ -6,6 +6,7 @@ import { calculateJuryVerdict } from "./jury";
 import { buildAllJurorViews, type JurorViewId } from "./juror-views";
 import { OpenAICourtSessionRunner } from "./openai-session-runner";
 import type { CourtSessionRunner } from "./session-runner";
+import type { TrialObserver } from "../trial-observer";
 
 const EvidenceOutputSchema = EvidenceMicroFindingSchema.omit({ evidenceId: true, sourceRole: true }).strict();
 const JurorOutputSchema = JurorVoteSchema.omit({ jurorId: true, view: true }).strict();
@@ -19,6 +20,7 @@ export type CourtProcessOptions = {
   timeoutMs?: number;
   maxOutputTokens?: number;
   demoMode?: boolean;
+  observer?: TrialObserver;
 };
 
 function fallbackEvidence(caseData: Case, evidenceId: string): EvidenceMicroFinding {
@@ -35,9 +37,14 @@ function fallbackEvidence(caseData: Case, evidenceId: string): EvidenceMicroFind
   });
 }
 
-async function examineEvidence(caseData: Case, runner: CourtSessionRunner | null, provider: ProviderConfig) {
+async function examineEvidence(caseData: Case, runner: CourtSessionRunner | null, provider: ProviderConfig, observer?: TrialObserver) {
   const results = await Promise.all(caseData.evidence.map(async (evidence) => {
-    if (!runner) return { finding: fallbackEvidence(caseData, evidence.id), fallback: true };
+    await observer?.({ type: "evidence_analysis_started", evidenceIds: [evidence.id], status: "examining" });
+    if (!runner) {
+      const finding = fallbackEvidence(caseData, evidence.id);
+      await observer?.({ type: "evidence_analysis_completed", evidenceIds: [evidence.id], status: "verified", summary: finding.finding, confidence: finding.confidence, mode: "fallback" });
+      return { finding, fallback: true };
+    }
     const input = structuredClone({
       evidence: { id: evidence.id, category: evidence.category, verified: evidence.verified, reliability: evidence.reliability, summary: evidence.summary },
       question: "What does this specific evidence piece establish?",
@@ -51,9 +58,13 @@ async function examineEvidence(caseData: Case, runner: CourtSessionRunner | null
         provider,
         systemPrompt: "Assess only this evidence fragment. State only what it establishes. Do not issue a case verdict or infer from absent context. Return JSON only.",
       });
-      return { finding: EvidenceMicroFindingSchema.parse({ evidenceId: evidence.id, sourceRole: "evidence_examiner", ...output }), fallback: false };
+      const finding = EvidenceMicroFindingSchema.parse({ evidenceId: evidence.id, sourceRole: "evidence_examiner", ...output });
+      await observer?.({ type: "evidence_analysis_completed", evidenceIds: [evidence.id], status: finding.supportStatus, summary: finding.finding, confidence: finding.confidence, mode: "live" });
+      return { finding, fallback: false };
     } catch {
-      return { finding: fallbackEvidence(caseData, evidence.id), fallback: true };
+      const finding = fallbackEvidence(caseData, evidence.id);
+      await observer?.({ type: "evidence_analysis_completed", evidenceIds: [evidence.id], status: finding.supportStatus, summary: finding.finding, confidence: finding.confidence, mode: "fallback" });
+      return { finding, fallback: true };
     }
   }));
   return results;
@@ -62,7 +73,7 @@ async function examineEvidence(caseData: Case, runner: CourtSessionRunner | null
 function judgeIssues(packet: ReturnType<typeof buildCasePacket>) {
   const issues: Array<{ issueId: string; issueType: JudgeIssueAssessment["issueType"]; label: string; evidenceIds: string[] }> = [];
   if (packet.contradictions.length) issues.push({ issueId: "JI-FACT", issueType: "factual", label: packet.contradictions[0], evidenceIds: ["EV-03", "EV-04"] });
-  if (packet.counterfactual.changedOutcome) issues.push({ issueId: "JI-CF", issueType: "counterfactual", label: "Postal-code neutralization changed the recommendation.", evidenceIds: ["EV-05"] });
+  if (packet.counterfactual.changedOutcome) issues.push({ issueId: "JI-CF", issueType: "counterfactual", label: `${packet.counterfactual.testedField} neutralization changed the recommendation.`, evidenceIds: ["EV-05"] });
   if (packet.riskFlags.some((risk) => risk.type === "privacy" || risk.type === "bias")) issues.push({ issueId: "JI-PRIV", issueType: "privacy", label: "Location data use may create proxy or minimization concerns.", evidenceIds: ["EV-05"] });
   if (!issues.length) issues.push({ issueId: "JI-EVID", issueType: "evidence", label: "Assess whether the structured evidence support is sufficient.", evidenceIds: packet.evidenceReferences });
   return issues.slice(0, 3);
@@ -73,7 +84,7 @@ function fallbackJudge(issue: ReturnType<typeof judgeIssues>[number]): JudgeIssu
     issueId: issue.issueId,
     issueType: issue.issueType,
     assessment: issue.issueType === "counterfactual"
-      ? "The changed outcome establishes sensitivity to postal code and requires human review; it does not prove discrimination."
+      ? "The changed outcome establishes counterfactual sensitivity and requires human review; it does not prove discrimination."
       : issue.issueType === "factual"
         ? "The automated factual characterization is unresolved because the contextual evidence provides a material explanation."
         : "Use of location data presents a serious proxy and data-minimization concern requiring human review.",
@@ -83,9 +94,13 @@ function fallbackJudge(issue: ReturnType<typeof judgeIssues>[number]): JudgeIssu
   });
 }
 
-async function assessJudgeIssues(packet: ReturnType<typeof buildCasePacket>, runner: CourtSessionRunner | null, provider: ProviderConfig) {
+async function assessJudgeIssues(packet: ReturnType<typeof buildCasePacket>, runner: CourtSessionRunner | null, provider: ProviderConfig, observer?: TrialObserver) {
   return Promise.all(judgeIssues(packet).map(async (issue) => {
-    if (!runner) return { assessment: fallbackJudge(issue), fallback: true };
+    if (!runner) {
+      const assessment = fallbackJudge(issue);
+      await observer?.({ type: "judge_assessment_ready", evidenceIds: issue.evidenceIds, status: assessment.supportStatus, summary: assessment.assessment, confidence: assessment.confidence, mode: "fallback" });
+      return { assessment, fallback: true };
+    }
     const input = structuredClone({ issue: { type: issue.issueType, label: issue.label, evidenceIds: issue.evidenceIds }, packetFindings: [
       ...packet.verifiedFindings.filter((finding) => issue.evidenceIds.includes(finding.evidenceId)),
       ...packet.disputedFindings.filter((finding) => issue.evidenceIds.includes(finding.evidenceId)),
@@ -99,8 +114,14 @@ async function assessJudgeIssues(packet: ReturnType<typeof buildCasePacket>, run
         provider,
         systemPrompt: "Assess only this issue independently. Do not predict or reference a jury vote. Give no final disposition. Return JSON only.",
       });
-      return { assessment: JudgeIssueAssessmentSchema.parse({ issueId: issue.issueId, issueType: issue.issueType, ...output }), fallback: false };
-    } catch { return { assessment: fallbackJudge(issue), fallback: true }; }
+      const assessment = JudgeIssueAssessmentSchema.parse({ issueId: issue.issueId, issueType: issue.issueType, ...output });
+      await observer?.({ type: "judge_assessment_ready", evidenceIds: issue.evidenceIds, status: assessment.supportStatus, summary: assessment.assessment, confidence: assessment.confidence, mode: "live" });
+      return { assessment, fallback: false };
+    } catch {
+      const assessment = fallbackJudge(issue);
+      await observer?.({ type: "judge_assessment_ready", evidenceIds: issue.evidenceIds, status: assessment.supportStatus, summary: assessment.assessment, confidence: assessment.confidence, mode: "fallback" });
+      return { assessment, fallback: true };
+    }
   }));
 }
 
@@ -110,11 +131,16 @@ const fallbackVotes: JurorVote[] = [
   { jurorId: "J3", view: "contradiction_first", vote: "human_review", confidence: 0.8, keyEvidenceIds: ["EV-03", "EV-05"], reason: "The factual and proxy risks require a human disposition." },
 ].map((vote) => JurorVoteSchema.parse(vote));
 
-async function collectJurorVotes(packet: ReturnType<typeof buildCasePacket>, runner: CourtSessionRunner | null, provider: ProviderConfig) {
+async function collectJurorVotes(packet: ReturnType<typeof buildCasePacket>, runner: CourtSessionRunner | null, provider: ProviderConfig, observer?: TrialObserver) {
   const jurorIds = ["J1", "J2", "J3"] as const;
   const views = buildAllJurorViews(packet);
   return Promise.all(jurorIds.map(async (jurorId, index) => {
-    if (!runner) return { vote: structuredClone(fallbackVotes[index]), fallback: true };
+    await observer?.({ type: "juror_started", role: jurorId, evidenceIds: packet.evidenceReferences, status: "reviewing", details: { view: views[jurorId].view } });
+    if (!runner) {
+      const vote = structuredClone(fallbackVotes[index]);
+      await observer?.({ type: "juror_vote_sealed", role: jurorId, evidenceIds: vote.keyEvidenceIds, status: "sealed", confidence: vote.confidence, mode: "fallback", details: { view: vote.view } });
+      return { vote, fallback: true };
+    }
     const jurorView = views[jurorId];
     const input = structuredClone({ admissibleCaseView: jurorView });
     try {
@@ -127,8 +153,14 @@ async function collectJurorVotes(packet: ReturnType<typeof buildCasePacket>, run
         systemPrompt: "Vote independently from this neutral view of the complete admissible facts. You cannot see other jurors. Do not infer omitted facts. Give a very short reason and cited evidence IDs. Return JSON only.",
       });
       if (!output.keyEvidenceIds.every((evidenceId) => packet.evidenceReferences.includes(evidenceId))) throw new Error("Juror cited inadmissible evidence");
-      return { vote: JurorVoteSchema.parse({ jurorId, view: jurorView.view satisfies JurorViewId, ...output }), fallback: false };
-    } catch { return { vote: structuredClone(fallbackVotes[index]), fallback: true }; }
+      const vote = JurorVoteSchema.parse({ jurorId, view: jurorView.view satisfies JurorViewId, ...output });
+      await observer?.({ type: "juror_vote_sealed", role: jurorId, evidenceIds: vote.keyEvidenceIds, status: "sealed", confidence: vote.confidence, mode: "live", details: { view: vote.view } });
+      return { vote, fallback: false };
+    } catch {
+      const vote = structuredClone(fallbackVotes[index]);
+      await observer?.({ type: "juror_vote_sealed", role: jurorId, evidenceIds: vote.keyEvidenceIds, status: "sealed", confidence: vote.confidence, mode: "fallback", details: { view: vote.view } });
+      return { vote, fallback: true };
+    }
   }));
 }
 
@@ -150,13 +182,15 @@ export async function runCourtProcess(
     maxOutputTokens: options.maxOutputTokens ?? 180,
   };
   const runner = !useMocks && apiKey ? (options.runner ?? new OpenAICourtSessionRunner(apiKey)) : null;
-  const evidenceResults = await examineEvidence(caseData, runner, provider);
+  const evidenceResults = await examineEvidence(caseData, runner, provider, options.observer);
   const ledger = createEvidenceLedger(evidenceResults.map((result) => result.finding));
+  await options.observer?.({ type: "clerk_started", evidenceIds: ledger.entries.map((entry) => entry.evidenceId), status: "validating" });
   const casePacket = buildCasePacket(ledger, witnesses, counterfactual, `CP-${caseData.id}`);
+  await options.observer?.({ type: "case_packet_created", evidenceIds: casePacket.evidenceReferences, status: "sealed", confidence: casePacket.confidence, details: { packetId: casePacket.packetId, verified: casePacket.verifiedFindings.length, risks: casePacket.riskFlags.length } });
 
   // Both branches are independent. The result is not exposed until assessments are sealed.
-  const judgePromise = assessJudgeIssues(casePacket, runner, provider);
-  const jurorPromise = collectJurorVotes(casePacket, runner, provider);
+  const judgePromise = assessJudgeIssues(casePacket, runner, provider, options.observer);
+  const jurorPromise = collectJurorVotes(casePacket, runner, provider, options.observer);
   const judgeResults = await judgePromise;
   const jurorResults = await jurorPromise;
   const jurorVotes = jurorResults.map((result) => result.vote);

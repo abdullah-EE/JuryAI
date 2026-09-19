@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { runAgentReview } from "../lib/agents/service";
 import { generateComplianceSummary, processingZones } from "../lib/compliance";
 import { scenarios } from "../lib/scenarios";
+import { executeTrialStream } from "../lib/trial-events";
 
 describe("Reusable scenario and governance platform", () => {
   it("defines three scenarios with equivalent evidence contracts", () => {
@@ -11,10 +12,16 @@ describe("Reusable scenario and governance platform", () => {
   });
   it("runs every scenario through the same governance engine", async () => {
     for (const scenario of scenarios) {
-      const result = await runAgentReview({ caseData: scenario.caseData, useMocks: true, demoMode: true });
-      assert.equal(result.findings.length, 3);
-      assert.equal(result.court.jurorVotes.length, 3);
-      assert.equal(result.court.casePacket.packetId, `CP-${scenario.caseData.id}`);
+      const events: Array<{ type: string; role?: string; details?: Record<string, unknown> }> = [];
+      const result = await executeTrialStream({ scenarioId: scenario.id, zoneId: "eu_trusted" }, (event) => { events.push(event); }, { pace: false });
+      assert.equal(result.review.findings.length, 3);
+      assert.equal(result.review.court.jurorVotes.length, 3);
+      assert.equal(result.review.court.casePacket.packetId, `CP-${scenario.caseData.id}`);
+      assert.equal(events[0].type, "trial_started");
+      assert.equal(events.at(-1)?.type, "trial_completed");
+      assert.equal(events.filter((event) => event.type === "juror_vote_sealed").length, 3);
+      assert.ok(events.findIndex((event) => event.type === "jury_complete") < events.findIndex((event) => event.type === "jury_revealed"));
+      assert.equal(result.review.counterfactual.testedField, scenario.sensitivity.field);
     }
   });
   it("generates a complete typed compliance summary", async () => {

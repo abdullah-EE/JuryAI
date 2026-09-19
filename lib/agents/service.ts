@@ -1,4 +1,4 @@
-import { counterfactualRiskFlag, runDemoPostalCounterfactual } from "../counterfactual";
+import { counterfactualRiskFlag, runScenarioCounterfactual } from "../counterfactual";
 import { demoCase } from "../demo-case";
 import { mockFindings } from "../mock-agents";
 import { AgentFindingSchema, AgentReviewResultSchema, type AgentFinding, type Case, type CounterfactualResult } from "../schemas";
@@ -9,6 +9,7 @@ import { OpenAIResponsesRunner } from "./openai-runner";
 import { AgentModelOutputSchema, type AgentModelOutput } from "./output-schema";
 import { InvalidAgentOutputError, type AgentRunner, type ProviderConfig } from "./runner";
 import { runCourtProcess, type CourtProcessOptions } from "../court/service";
+import type { TrialObserver } from "../trial-observer";
 
 type RunAgentsOptions = {
   runner?: AgentRunner;
@@ -20,9 +21,10 @@ type RunAgentsOptions = {
   maxOutputTokens?: number;
   courtRunner?: CourtProcessOptions["runner"];
   caseData?: Case;
+  observer?: TrialObserver;
 };
 
-const sensitivityPattern = /counterfactual sensitivity|remov(?:e|ing).*postal.*(?:change|flip)|postal.*changed.*(?:outcome|recommendation)/i;
+const sensitivityPattern = /counterfactual sensitivity|neutraliz(?:e|ing).*?(?:change|flip)|(?:postal|career.break|district).*changed.*(?:outcome|recommendation)/i;
 const prohibitedBiasClaimPattern = /bias (?:is )?proven|model is discriminatory|alternative is unbiased|decision is unbiased/i;
 
 function groundedBiasOutput(output: AgentModelOutput, result: CounterfactualResult): AgentModelOutput {
@@ -132,7 +134,7 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
   const useMocks = options.useMocks ?? process.env.USE_MOCK_AGENTS === "true";
   const demoMode = options.demoMode ?? process.env.DEMO_MODE === "true";
   const caseData = options.caseData ?? demoCase;
-  const counterfactual = runDemoPostalCounterfactual(caseData);
+  const counterfactual = runScenarioCounterfactual(caseData);
   const requestedTimeout = options.timeoutMs ?? Number(process.env.AGENT_TIMEOUT_MS ?? (demoMode ? 5000 : 15000));
   const safeTimeout = Number.isFinite(requestedTimeout) && requestedTimeout > 0 ? requestedTimeout : (demoMode ? 5000 : 15000);
   const requestedTokens = options.maxOutputTokens ?? (demoMode ? 350 : 500);
@@ -143,8 +145,15 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
     maxOutputTokens: demoMode ? Math.min(requestedTokens, 350) : requestedTokens,
   };
   if (useMocks || !apiKey) {
-    const findings = agentRoles.map((role) => mockFor(role, caseData));
-    const court = await runCourtProcess(caseData, findings, counterfactual, { useMocks: true, demoMode, model: provider.model, timeoutMs: provider.timeoutMs });
+    const findings = await Promise.all(agentRoles.map(async (role) => {
+      const evidenceIds = agentDefinitions[role].manifest.allowedEvidenceIds;
+      await options.observer?.({ type: "witness_started", role, evidenceIds, status: "reviewing" });
+      const finding = mockFor(role, caseData);
+      await options.observer?.({ type: "witness_completed", role, evidenceIds, status: "completed", summary: finding.recommendation, confidence: finding.confidence, mode: "fallback" });
+      await options.observer?.({ type: "finding_sealed", role, evidenceIds, status: "sealed", summary: finding.recommendation });
+      return finding;
+    }));
+    const court = await runCourtProcess(caseData, findings, counterfactual, { useMocks: true, demoMode, model: provider.model, timeoutMs: provider.timeoutMs, observer: options.observer });
     return AgentReviewResultSchema.parse({ findings, mode: "fallback", counterfactual, court });
   }
 
@@ -152,13 +161,20 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
   const startedAt = Date.now();
   const results = await Promise.all(agentRoles.map(async (role) => {
     const roleStartedAt = Date.now();
+    const evidenceIds = agentDefinitions[role].manifest.allowedEvidenceIds;
+    await options.observer?.({ type: "witness_started", role, evidenceIds, status: "reviewing" });
     try {
       const finding = await executeLiveAgent(role, runner, provider, counterfactual, !demoMode, caseData);
       console.info("[agent-execution]", { role, status: "live", latencyMs: Date.now() - roleStartedAt, model: provider.model });
+      await options.observer?.({ type: "witness_completed", role, evidenceIds, status: "completed", summary: finding.recommendation, confidence: finding.confidence, mode: "live" });
+      await options.observer?.({ type: "finding_sealed", role, evidenceIds, status: "sealed", summary: finding.recommendation });
       return { finding, fallback: false };
     } catch {
       console.info("[agent-execution]", { role, status: "fallback", latencyMs: Date.now() - roleStartedAt, model: provider.model });
-      return { finding: mockFor(role, caseData), fallback: true };
+      const finding = mockFor(role, caseData);
+      await options.observer?.({ type: "witness_completed", role, evidenceIds, status: "completed", summary: finding.recommendation, confidence: finding.confidence, mode: "fallback" });
+      await options.observer?.({ type: "finding_sealed", role, evidenceIds, status: "sealed", summary: finding.recommendation });
+      return { finding, fallback: true };
     }
   }));
   const mode = results.some((result) => result.fallback) ? "fallback" : "live";
@@ -171,6 +187,7 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
     model: provider.model,
     timeoutMs: provider.timeoutMs,
     demoMode,
+    observer: options.observer,
   });
   const reviewMode = options.runner && !options.courtRunner
     ? mode

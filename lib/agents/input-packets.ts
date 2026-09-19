@@ -24,14 +24,18 @@ const FactCheckerPacketSchema = z.object({
 const BiasPrivacyPacketSchema = z.object({
   role: z.literal("bias_privacy_challenger"),
   evidence: z.array(EvidenceSnippetSchema).length(1),
-  postalCode: z.string(),
+  postalCode: z.string().optional(),
+  sensitivityInput: z.object({
+    name: z.enum(["postalCode", "careerBreak", "districtCode"]),
+    value: z.string(),
+  }).strict(),
   modelInputLabels: z.array(z.string()),
   decisionMetadata: z.object({
     recommendation: z.enum(["approve", "decline", "manual_review"]),
     confidence: z.number().min(0).max(1),
   }).strict(),
   counterfactualResult: z.object({
-    testedField: z.literal("postalCode"),
+    testedField: z.enum(["postalCode", "careerBreak", "districtCode"]),
     baselineRecommendation: z.enum(["approve", "decline", "manual_review"]),
     counterfactualRecommendation: z.enum(["approve", "decline", "manual_review"]),
     changedOutcome: z.boolean(),
@@ -59,9 +63,9 @@ function evidenceFor(caseData: Case, role: AgentRole) {
       return {
         id: evidence.id,
         category: evidence.category,
-        summary: "Application profile contains the explicitly permitted postal geography field.",
+        summary: evidence.summary,
         reliability: evidence.reliability,
-        dataPoints: ["Postal code"],
+        dataPoints: [...evidence.dataPoints],
       };
     }
     return {
@@ -98,7 +102,11 @@ export function createAgentInputPacket(role: AgentRole, caseData: Case, counterf
       : {
           role,
           evidence,
-          postalCode: caseData.applicant.postalCode,
+          ...(counterfactual!.testedField === "postalCode" ? { postalCode: caseData.applicant.postalCode } : {}),
+          sensitivityInput: {
+            name: counterfactual!.testedField,
+            value: counterfactual!.testedField === "postalCode" ? caseData.applicant.postalCode : "Present in EV-05 model metadata",
+          },
           modelInputLabels: [...caseData.initialDecision.dataUsed],
           decisionMetadata: {
             recommendation: caseData.initialDecision.recommendation,
