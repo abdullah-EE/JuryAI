@@ -25,6 +25,7 @@ export function buildCasePacket(
   ledger: EvidenceLedger,
   witnesses: AgentFinding[],
   counterfactual: CounterfactualResult,
+  packetId = "CP-JAI-2026-0417",
 ): CasePacket {
   const verifiedFindings = ledger.entries.filter((entry) => entry.supportStatus === "verified");
   const disputedFindings = ledger.entries.filter((entry) => entry.supportStatus !== "verified");
@@ -61,7 +62,7 @@ export function buildCasePacket(
     ? Number((ledger.entries.reduce((sum, entry) => sum + entry.confidence, 0) / ledger.entries.length).toFixed(2))
     : 0;
   return CasePacketSchema.parse({
-    packetId: "CP-JAI-2026-0417",
+    packetId,
     verifiedFindings,
     disputedFindings,
     evidenceReferences: Array.from(new Set(ledger.entries.map((entry) => entry.evidenceId))),

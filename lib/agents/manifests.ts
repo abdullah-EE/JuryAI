@@ -23,8 +23,8 @@ export const agentDefinitions: Record<AgentRole, AgentDefinition> = {
       receivesOtherAgentFindings: false,
       receivesInitialDecisionRationale: false,
     }),
-    sealedInputDescription: "Financial evidence EV-01, EV-02, and EV-03 only — no protected attributes or other testimony",
-    systemPrompt: "Assess lending eligibility only from the supplied financial evidence. Do not infer protected traits. Return concise conclusions, not chain-of-thought. Cite only supplied evidence IDs.",
+    sealedInputDescription: "Decision evidence EV-01, EV-02, and EV-03 only — no protected attributes or other testimony",
+    systemPrompt: "Assess the decision only from the supplied eligibility evidence. Do not infer protected traits. Return concise conclusions, not chain-of-thought. Cite only supplied evidence IDs.",
   },
   fact_checker: {
     agentId: "AG-FACT-01",
@@ -39,7 +39,7 @@ export const agentDefinitions: Record<AgentRole, AgentDefinition> = {
       receivesInitialDecisionRationale: true,
     }),
     sealedInputDescription: "Claims under review + EV-02, EV-03, and EV-04 only — model identity and other testimony withheld",
-    systemPrompt: "Verify only whether each supplied claim is supported by the supplied evidence. Do not infer who produced a claim or make the lending decision. Return concise conclusions, not chain-of-thought. Cite only supplied evidence IDs.",
+    systemPrompt: "Verify only whether each supplied claim is supported by the supplied evidence. Do not infer who produced a claim or make the final decision. Return concise conclusions, not chain-of-thought. Cite only supplied evidence IDs.",
   },
   bias_privacy_challenger: {
     agentId: "AG-BIAS-01",

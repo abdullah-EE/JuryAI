@@ -24,14 +24,15 @@ export type CourtProcessOptions = {
 function fallbackEvidence(caseData: Case, evidenceId: string): EvidenceMicroFinding {
   const evidence = caseData.evidence.find((item) => item.id === evidenceId);
   if (!evidence) throw new Error(`Unknown evidence ${evidenceId}`);
-  const findings: Record<string, Pick<EvidenceMicroFinding, "finding" | "supportStatus" | "riskType" | "severity" | "confidence">> = {
-    "EV-01": { finding: "Verified records establish stable income and employment tenure.", supportStatus: "verified", riskType: null, severity: "none", confidence: 0.94 },
-    "EV-02": { finding: "Credit history establishes no defaults, collections, or missed instalments.", supportStatus: "verified", riskType: null, severity: "none", confidence: 0.95 },
-    "EV-03": { finding: "Banking data establishes two transfers posted late and a 31% debt-to-income ratio.", supportStatus: "verified", riskType: "factual", severity: "medium", confidence: 0.91 },
-    "EV-04": { finding: "The bank notice attributes the late postings to a documented account migration.", supportStatus: "verified", riskType: "factual", severity: "medium", confidence: 0.93 },
-    "EV-05": { finding: "The application profile contains postal code, a potential location proxy requiring limited use.", supportStatus: "verified", riskType: "privacy", severity: "high", confidence: 0.86 },
-  };
-  return EvidenceMicroFindingSchema.parse({ evidenceId, sourceRole: "evidence_examiner", ...findings[evidenceId] });
+  return EvidenceMicroFindingSchema.parse({
+    evidenceId,
+    sourceRole: "evidence_examiner",
+    finding: evidence.summary,
+    supportStatus: "verified",
+    confidence: evidence.reliability === "high" ? 0.93 : 0.84,
+    riskType: evidenceId === "EV-05" ? "privacy" : evidenceId === "EV-03" ? "factual" : null,
+    severity: evidenceId === "EV-05" ? "high" : evidenceId === "EV-03" ? "medium" : "none",
+  });
 }
 
 async function examineEvidence(caseData: Case, runner: CourtSessionRunner | null, provider: ProviderConfig) {
@@ -74,7 +75,7 @@ function fallbackJudge(issue: ReturnType<typeof judgeIssues>[number]): JudgeIssu
     assessment: issue.issueType === "counterfactual"
       ? "The changed outcome establishes sensitivity to postal code and requires human review; it does not prove discrimination."
       : issue.issueType === "factual"
-        ? "The payment-risk characterization is unresolved because contextual evidence attributes the delay to bank migration."
+        ? "The automated factual characterization is unresolved because the contextual evidence provides a material explanation."
         : "Use of location data presents a serious proxy and data-minimization concern requiring human review.",
     supportStatus: "unresolved",
     confidence: 0.84,
@@ -104,8 +105,8 @@ async function assessJudgeIssues(packet: ReturnType<typeof buildCasePacket>, run
 }
 
 const fallbackVotes: JurorVote[] = [
-  { jurorId: "J1", view: "evidence_first", vote: "overturn", confidence: 0.88, keyEvidenceIds: ["EV-02", "EV-04"], reason: "Verified context undermines the stated payment-risk basis." },
-  { jurorId: "J2", view: "claim_evidence", vote: "overturn", confidence: 0.84, keyEvidenceIds: ["EV-01", "EV-05"], reason: "Affordability is supported and location sensitivity is material." },
+  { jurorId: "J1", view: "evidence_first", vote: "overturn", confidence: 0.88, keyEvidenceIds: ["EV-02", "EV-04"], reason: "Verified context undermines the automated decision basis." },
+  { jurorId: "J2", view: "claim_evidence", vote: "overturn", confidence: 0.84, keyEvidenceIds: ["EV-01", "EV-05"], reason: "Evidence support and proxy sensitivity favor overturning." },
   { jurorId: "J3", view: "contradiction_first", vote: "human_review", confidence: 0.8, keyEvidenceIds: ["EV-03", "EV-05"], reason: "The factual and proxy risks require a human disposition." },
 ].map((vote) => JurorVoteSchema.parse(vote));
 
@@ -151,7 +152,7 @@ export async function runCourtProcess(
   const runner = !useMocks && apiKey ? (options.runner ?? new OpenAICourtSessionRunner(apiKey)) : null;
   const evidenceResults = await examineEvidence(caseData, runner, provider);
   const ledger = createEvidenceLedger(evidenceResults.map((result) => result.finding));
-  const casePacket = buildCasePacket(ledger, witnesses, counterfactual);
+  const casePacket = buildCasePacket(ledger, witnesses, counterfactual, `CP-${caseData.id}`);
 
   // Both branches are independent. The result is not exposed until assessments are sealed.
   const judgePromise = assessJudgeIssues(casePacket, runner, provider);

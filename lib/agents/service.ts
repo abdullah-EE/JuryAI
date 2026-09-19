@@ -1,7 +1,8 @@
 import { counterfactualRiskFlag, runDemoPostalCounterfactual } from "../counterfactual";
 import { demoCase } from "../demo-case";
 import { mockFindings } from "../mock-agents";
-import { AgentFindingSchema, AgentReviewResultSchema, type AgentFinding, type CounterfactualResult } from "../schemas";
+import { AgentFindingSchema, AgentReviewResultSchema, type AgentFinding, type Case, type CounterfactualResult } from "../schemas";
+import { getScenarioForCase } from "../scenarios";
 import { createAgentInputPacket, assertPacketWithinManifest } from "./input-packets";
 import { agentDefinitions, agentRoles, cloneManifest, type AgentRole } from "./manifests";
 import { OpenAIResponsesRunner } from "./openai-runner";
@@ -18,6 +19,7 @@ type RunAgentsOptions = {
   timeoutMs?: number;
   maxOutputTokens?: number;
   courtRunner?: CourtProcessOptions["runner"];
+  caseData?: Case;
 };
 
 const sensitivityPattern = /counterfactual sensitivity|remov(?:e|ing).*postal.*(?:change|flip)|postal.*changed.*(?:outcome|recommendation)/i;
@@ -58,10 +60,17 @@ function groundedBiasOutput(output: AgentModelOutput, result: CounterfactualResu
   });
 }
 
-function mockFor(role: AgentRole): AgentFinding {
+function mockFor(role: AgentRole, caseData: Case = demoCase): AgentFinding {
   const finding = mockFindings.find((item) => item.role === role);
   if (!finding) throw new Error(`Missing mock for ${role}`);
-  return AgentFindingSchema.parse(structuredClone(finding));
+  if (caseData.id === demoCase.id) return AgentFindingSchema.parse(structuredClone(finding));
+  const scenario = getScenarioForCase(caseData);
+  const adapted = structuredClone(finding);
+  adapted.recommendation = scenario.witnessFindings[agentRoles.indexOf(role)];
+  adapted.claims[0].statement = adapted.recommendation;
+  if (role === "fact_checker") adapted.claims[0].status = "unsupported";
+  if (role === "bias_privacy_challenger") adapted.claims[0].status = "observed";
+  return AgentFindingSchema.parse(adapted);
 }
 
 function assembleFinding(role: AgentRole, output: AgentModelOutput, counterfactual: CounterfactualResult): AgentFinding {
@@ -94,9 +103,10 @@ async function executeLiveAgent(
   provider: ProviderConfig,
   counterfactual: CounterfactualResult,
   allowCorrectionRetry: boolean,
+  caseData: Case,
 ): Promise<AgentFinding> {
   const definition = agentDefinitions[role];
-  const inputPacket = createAgentInputPacket(role, demoCase, counterfactual);
+  const inputPacket = createAgentInputPacket(role, caseData, counterfactual);
   assertPacketWithinManifest(role, inputPacket);
   const maximumAttempts = allowCorrectionRetry ? 2 : 1;
   for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {
@@ -121,7 +131,8 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY;
   const useMocks = options.useMocks ?? process.env.USE_MOCK_AGENTS === "true";
   const demoMode = options.demoMode ?? process.env.DEMO_MODE === "true";
-  const counterfactual = runDemoPostalCounterfactual(demoCase);
+  const caseData = options.caseData ?? demoCase;
+  const counterfactual = runDemoPostalCounterfactual(caseData);
   const requestedTimeout = options.timeoutMs ?? Number(process.env.AGENT_TIMEOUT_MS ?? (demoMode ? 5000 : 15000));
   const safeTimeout = Number.isFinite(requestedTimeout) && requestedTimeout > 0 ? requestedTimeout : (demoMode ? 5000 : 15000);
   const requestedTokens = options.maxOutputTokens ?? (demoMode ? 350 : 500);
@@ -132,8 +143,8 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
     maxOutputTokens: demoMode ? Math.min(requestedTokens, 350) : requestedTokens,
   };
   if (useMocks || !apiKey) {
-    const findings = agentRoles.map(mockFor);
-    const court = await runCourtProcess(demoCase, findings, counterfactual, { useMocks: true, demoMode, model: provider.model, timeoutMs: provider.timeoutMs });
+    const findings = agentRoles.map((role) => mockFor(role, caseData));
+    const court = await runCourtProcess(caseData, findings, counterfactual, { useMocks: true, demoMode, model: provider.model, timeoutMs: provider.timeoutMs });
     return AgentReviewResultSchema.parse({ findings, mode: "fallback", counterfactual, court });
   }
 
@@ -142,18 +153,18 @@ export async function runAgentReview(options: RunAgentsOptions = {}) {
   const results = await Promise.all(agentRoles.map(async (role) => {
     const roleStartedAt = Date.now();
     try {
-      const finding = await executeLiveAgent(role, runner, provider, counterfactual, !demoMode);
+      const finding = await executeLiveAgent(role, runner, provider, counterfactual, !demoMode, caseData);
       console.info("[agent-execution]", { role, status: "live", latencyMs: Date.now() - roleStartedAt, model: provider.model });
       return { finding, fallback: false };
     } catch {
       console.info("[agent-execution]", { role, status: "fallback", latencyMs: Date.now() - roleStartedAt, model: provider.model });
-      return { finding: mockFor(role), fallback: true };
+      return { finding: mockFor(role, caseData), fallback: true };
     }
   }));
   const mode = results.some((result) => result.fallback) ? "fallback" : "live";
   console.info("[agent-batch]", { status: mode, latencyMs: Date.now() - startedAt, model: provider.model });
   const findings = results.map((result) => result.finding);
-  const court = await runCourtProcess(demoCase, findings, counterfactual, {
+  const court = await runCourtProcess(caseData, findings, counterfactual, {
     runner: options.courtRunner,
     useMocks: Boolean(options.runner && !options.courtRunner),
     apiKey,
