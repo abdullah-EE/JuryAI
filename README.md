@@ -1,29 +1,78 @@
-# JuryAI: Procedural Fairness for Enterprise AI (Hackathon Demo)
+# JuryAI
 
-*This repository contains the interactive frontend prototype of JuryAI, built for the AaltoAI Data Sovereignty & Responsible AI Hackathon (IBM AI Governance Track).*
+> **AI should not be judge, jury, and witness.**
 
-## The Vision: What JuryAI Is
+**2nd Place — AaltoAI Data Sovereignty & Responsible AI Hackathon 2026**
 
-JuryAI is an AI governance escalation engine designed to put high-stakes automated decisions "on trial." Standard monolithic models act as judge, jury, and witness—creating single points of failure where hidden biases compound and compliance is impossible to audit. We replace this black-box faith with a verifiable, compartmentalized process.
+JuryAI is a decision-assurance prototype for high-stakes AI. It explores a simple idea: an AI system should not be trusted to make an important decision, explain that decision, and effectively validate its own reasoning without independent checks.
 
-The production architecture enforces procedural fairness through strict compartmentalization:
+Instead, JuryAI applies a courtroom-inspired review process built around separation of roles, evidence boundaries, preserved disagreement, and human final authority.
 
-* **Local Anonymizing Gate:** An on-premise firewall that strips PII before data reaches a reasoning model, ensuring data sovereignty.
+## How it works
 
-* **Context-Capped Witness Agents:** Specialized AI agents in isolated sessions receive mathematically capped token payloads, preventing context bloat.
+~~~text
+Original AI decision
+        ↓
+Identity + context filtering
+        ↓
+Compartmentalized specialist review
+        ↓
+Adversarial checks + counterfactual testing
+        ↓
+Deterministic Clerk assembles the case
+        ↓
+Independent AI jury review
+        ↓
+Human makes the final decision
+~~~
 
-* **Adversarial Synthesis:** An oversight engine that cross-examines agent outputs through counterfactual logic to detect contradictions and flag systemic bias.
+Each specialist is designed to receive only the evidence required for its role. Findings are structured and tied back to evidence references. Conflicting findings are preserved rather than averaged away, then assembled into a case that a human reviewer can inspect and question.
 
-* **Human Finality & Auditability:** The system surfaces a clean brief to a human decision-maker, generating a cryptographic routing footprint for compliance.
+For the hackathon demo, JuryAI was applied to an **AI-assisted lending decision**.
 
-## This Repository: The Hackathon MVP
+## Technical highlights
 
-To guarantee zero latency and absolute stability during our live 5-minute pitch, this repository serves as a deterministic, interactive visualization of the JuryAI dashboard and routing pipeline. 
+- Role-specific context contracts and evidence permissions
+- Structured agent inputs and outputs validated with **Zod**
+- Isolated review stages that avoid passing previous agents' conclusions forward
+- Deterministic evidence validation and case assembly
+- Counterfactual sensitivity checks
+- Independent jury views and sealed votes
+- Human-review interface with evidence-grounded case Q&A
+- Typed event-driven demo workflow with tests, linting, and type checking
 
-**MVP Tech Stack:**
+## Stack
 
-* Next.js / React Web Application
+- **Next.js 16**
+- **React 19**
+- **TypeScript**
+- **Zod**
+- **Tailwind CSS**
 
-* Tailwind CSS for styling and responsive layouts
+## Prototype scope
 
-* Deterministic state machine simulating the multi-agent routing pipeline and adversarial synthesis payload.
+This repository is the hackathon MVP and interactive demonstration of the JuryAI architecture. The live demo uses a deterministic/local workflow so the review process can be demonstrated reliably without depending on external model latency.
+
+It is **not** a deployed lending system, legal/compliance certification, or claim of bias-free AI.
+
+## Run locally
+
+~~~bash
+npm install
+npm run dev
+~~~
+
+Quality checks:
+
+~~~bash
+npm run typecheck
+npm run lint
+npm test
+npm run build
+~~~
+
+## Why I built it
+
+The project combines my interest in AI systems with a question that matters more as AI moves into consequential decisions: **how do we review the decision itself, not just monitor the model that produced it?**
+
+JuryAI was built for the IBM AI Governance track at the AaltoAI Data Sovereignty & Responsible AI Hackathon.
